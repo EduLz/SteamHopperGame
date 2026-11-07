@@ -280,7 +280,15 @@ function minifyJS(code) {
     patrol: '_pt2',
     cycle: '_cy',
     muted: '_mt',
-    color: '_cl3'
+    color: '_cl3',
+    SLAM_MAX_CD: '_SC',
+    THRUST_X: '_TX',
+    THRUST_Y: '_TY',
+    GRAVITY: '_GV',
+    slamCd: '_sCd',
+    slamReady: '_sRy',
+    slamRatio: '_sRt',
+    nextAlertY: '_nAY'
   };
 
   let mangled = tokenized;

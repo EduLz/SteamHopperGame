@@ -109,45 +109,10 @@
 
   // Alturas límite de cada zona donde aparece el Jefe y se detiene la lava
   const BOSS_ALTS = [80, 170, 270, 380];
-
-  const CHASSIS = [
-    {
-      id: 0,
-      name: 'MK.I ESTANDAR',
-      desc: 'BALANCEADO (100 PSI)',
-      tx: 0.135,
-      ty: -0.225,
-      grav: 0.095,
-      maxPsi: 100,
-      dmgMult: 1.0,
-      bodyCol: '#c87d3b',
-      hiCol: '#f59e0b'
-    },
-    {
-      id: 1,
-      name: 'MK.II TITANIO',
-      desc: '-50% DANO SIERRAS (DESB:100M)',
-      tx: 0.128,
-      ty: -0.235,
-      grav: 0.105,
-      maxPsi: 100,
-      dmgMult: 0.5,
-      bodyCol: '#64748b',
-      hiCol: '#cbd5e1'
-    },
-    {
-      id: 2,
-      name: 'MK.III COLIBRI',
-      desc: 'AGIL Y LIGERO (DESB:15 NUCLEOS)',
-      tx: 0.155,
-      ty: -0.255,
-      grav: 0.082,
-      maxPsi: 70,
-      dmgMult: 1.0,
-      bodyCol: '#10b981',
-      hiCol: '#6ee7b7'
-    }
-  ];
+  const THRUST_X = 0.135;
+  const THRUST_Y = -0.225;
+  const GRAVITY = 0.095;
+  const SLAM_MAX_CD = 90;
 
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d', { alpha: false });
@@ -511,8 +476,6 @@
   // =========================================================================
   let gameState = 0;
   let highScore = 0;
-  let totalCoresSaved = 0;
-  let selectedChassis = 0;
   let crtEnabled = true;
 
   // Ghost Replay (Fantasma del récord personal guardado cada 30 frames de tiempo)
@@ -522,7 +485,6 @@
 
   try {
     highScore = parseInt(localStorage.getItem('sh_hi') || '0', 10) || 0;
-    totalCoresSaved = parseInt(localStorage.getItem('sh_cores') || '0', 10) || 0;
     const rawGhost = localStorage.getItem('sh_ghost');
     if (rawGhost) bestGhost = JSON.parse(rawGhost);
   } catch (_) {}
@@ -550,6 +512,7 @@
     slamWaveR: 0,
     slamWaveX: 0,
     slamWaveY: 0,
+    slamCd: 0,
     grazeCd: 0,
     cooling: false,
     grounded: false,
@@ -594,7 +557,6 @@
   let screenShake = 0;
   let damageFlash = 0;
   let chromaTimer = 0;     // Aberración cromática en impactos / Overdrive / Slam
-  let currentFps = 60;
 
   let activeChunks = [];
   let topChunkIndex = -1;
@@ -602,7 +564,6 @@
   const getHeightMetersAtY = (y) => mx(0, fl((startY - y) / 12));
   const getDiffAtMeters = (m) => 1 + fl(m / 25);
   const getBiomeIndex = () => biomeStage & 3;
-  const isChassisUnlocked = (idx) => idx === 0 || (idx === 1 && highScore >= 100) || (idx === 2 && totalCoresSaved >= 15);
 
   function triggerGraze(gx, gy) {
     if (drone.grazeCd > 0) return;
@@ -618,21 +579,19 @@
 
   function applyDamage(energyLoss, hpLoss, reason) {
     if (drone.invuln > 0 || drone.overdrive > 0) return;
-    const ch = CHASSIS[selectedChassis];
     drone.invuln = 45;
     damageFlash = 10;
     chromaTimer = 14;
     screenShake = 9;
-    drone.pressure = mx(0, drone.pressure - energyLoss * ch.dmgMult);
+    drone.pressure = mx(0, drone.pressure - energyLoss);
 
     if (hpLoss > 0) {
-      const actualHpLoss = selectedChassis === 1 && rn() < 0.5 ? 0 : hpLoss;
-      drone.hp = mx(0, drone.hp - actualHpLoss);
+      drone.hp = mx(0, drone.hp - hpLoss);
     }
     sfxTone(160, 45, 0.25, 'sawtooth', 0.16);
 
     if (drone.hp <= 0) {
-      deathReason = reason || 'CHASIS DESTRUIDO';
+      deathReason = reason || 'DRON DESTRUIDO';
       triggerGameOver();
       return;
     }
@@ -659,8 +618,6 @@
     boss.coreTimer = 90;
     boss.shots = [];
 
-    bannerText = '!JEFE: ' + BIOMES[boss.type].bossName + '!';
-    levelBannerTimer = 160;
     chromaTimer = 15;
     playGateWarning();
   }
@@ -679,16 +636,15 @@
     }
 
     if (boss.hp <= 0) {
-      // Jefe derrotado: avanza al siguiente Bioma, repara casco y suelta núcleos
+      // Jefe derrotado: avanza al siguiente Bioma, repara casco y activa Overdrive
       boss.active = false;
       boss.shots = [];
       biomeStage++;
-      totalCoresSaved += 3;
       drone.hp = mn(3, drone.hp + 1);
       drone.pressure = drone.maxPsi;
       drone.overdrive = 180;
-      bannerText = '!JEFE DERROTADO! +ZONA';
-      levelBannerTimer = 150;
+      bannerText = '!ZONA SUPERADA! +1 HP';
+      levelBannerTimer = 130;
       screenShake = 16;
       chromaTimer = 22;
       sfxTone(261.6, 1046.5, 0.45, 'square', 0.14);
@@ -701,10 +657,11 @@
   }
 
   function triggerVentSlam() {
-    if (gameState !== 1 || drone.purge > 0) return;
+    if (gameState !== 1 || drone.purge > 0 || drone.slamCd > 0) return;
     if (drone.pressure < 25 && drone.overdrive <= 0) return;
     if (drone.overdrive <= 0) drone.pressure = mx(0, drone.pressure - 25);
 
+    drone.slamCd = SLAM_MAX_CD;
     drone.vy = mn(MAX_VY_DOWN * 1.35, drone.vy + 2.8);
     drone.slamWaveR = 2;
     drone.slamWaveX = drone.x;
@@ -929,18 +886,8 @@
 
     if (e.code === 'KeyM' && firstPress) muted = !muted;
     if (e.code === 'KeyC' && firstPress) crtEnabled = !crtEnabled;
-    if (gameState !== 1 && firstPress) {
-      if (e.code === 'KeyR') setSeed(((Date.now() & 0xffff) ^ (seed * 31)) >>> 0);
-      else if (e.code === 'Digit1' && isChassisUnlocked(0)) {
-        selectedChassis = 0;
-        sfxTone(330, 440, 0.08, 'square', 0.07);
-      } else if (e.code === 'Digit2' && isChassisUnlocked(1)) {
-        selectedChassis = 1;
-        sfxTone(330, 520, 0.08, 'square', 0.07);
-      } else if (e.code === 'Digit3' && isChassisUnlocked(2)) {
-        selectedChassis = 2;
-        sfxTone(330, 660, 0.08, 'square', 0.07);
-      }
+    if (gameState !== 1 && firstPress && e.code === 'KeyR') {
+      setSeed(((Date.now() & 0xffff) ^ (seed * 31)) >>> 0);
     }
 
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Enter'].includes(e.code)) {
@@ -957,6 +904,11 @@
 
   window.addEventListener('keyup', (e) => {
     keys[e.code] = false;
+  });
+
+  window.addEventListener('mousedown', () => {
+    initAudio();
+    if (gameState !== 1) startGame();
   });
 
   function handleTouches(e) {
@@ -986,21 +938,21 @@
   // =========================================================================
   function startGame() {
     setSeed(seed);
-    const ch = CHASSIS[selectedChassis];
 
     drone.x = W / 2;
     drone.y = 184;
     drone.vx = 0;
     drone.vy = 0;
     drone.theta = 0;
-    drone.maxPsi = ch.maxPsi;
-    drone.pressure = ch.maxPsi;
+    drone.maxPsi = 100;
+    drone.pressure = 100;
     drone.hp = 3;
     drone.invuln = 0;
     drone.purge = 0;
     drone.overdrive = 0;
     drone.comboCores = 0;
     drone.slamWaveR = 0;
+    drone.slamCd = 0;
     drone.grazeCd = 0;
     drone.cooling = false;
     drone.grounded = false;
@@ -1021,8 +973,8 @@
     currentMeters = 0;
     maxMeters = 0;
     diffLevel = 1;
-    levelBannerTimer = 90;
-    bannerText = '!DIFICULTAD NV.1!';
+    levelBannerTimer = 0;
+    bannerText = '';
     surgeTimer = 0;
     nextSurgeMeters = 90;
     deathReason = 'CONSUMIDO POR EL MAGMA';
@@ -1053,7 +1005,6 @@
     }
     try {
       localStorage.setItem('sh_hi', String(highScore));
-      localStorage.setItem('sh_cores', String(totalCoresSaved));
     } catch (_) {}
 
     for (let i = 0; i < 28; i++) {
@@ -1287,6 +1238,7 @@
     elapsedTime += dt / 60;
     if (drone.invuln > 0) drone.invuln = mx(0, drone.invuln - dt);
     if (drone.grazeCd > 0) drone.grazeCd = mx(0, drone.grazeCd - dt);
+    if (drone.slamCd > 0) drone.slamCd = mx(0, drone.slamCd - dt);
     if (levelBannerTimer > 0) levelBannerTimer = mx(0, levelBannerTimer - dt);
     if (surgeTimer > 0) surgeTimer = mx(0, surgeTimer - dt);
     if (drone.slamWaveR > 0) {
@@ -1301,7 +1253,6 @@
       curGhost.push(drone.x | 0, drone.y | 0);
     }
 
-    const ch = CHASSIS[selectedChassis];
     const wantLeft = !!(keys['ArrowLeft'] || keys['KeyA'] || touchLeft);
     const wantRight = !!(keys['ArrowRight'] || keys['KeyD'] || touchRight);
 
@@ -1344,15 +1295,15 @@
     let ay = 0;
 
     if (drone.leftOn) {
-      ax += ch.tx * boostMult;
-      ay += ch.ty * boostMult;
+      ax += THRUST_X * boostMult;
+      ay += THRUST_Y * boostMult;
       if (rn() < 0.85 * dt) {
         spawnParticle(drone.overdrive > 0 ? 1 : 0, drone.x - 6, drone.y + 3, -0.8 + (rn() - 0.5) * 0.4, 1.1 + rn() * 0.4, 13, 3);
       }
     }
     if (drone.rightOn) {
-      ax -= ch.tx * boostMult;
-      ay += ch.ty * boostMult;
+      ax -= THRUST_X * boostMult;
+      ay += THRUST_Y * boostMult;
       if (rn() < 0.85 * dt) {
         spawnParticle(drone.overdrive > 0 ? 1 : 0, drone.x + 6, drone.y + 3, 0.8 + (rn() - 0.5) * 0.4, 1.1 + rn() * 0.4, 13, 3);
       }
@@ -1371,7 +1322,7 @@
 
     const dragFactor = M.pow(DRAG, dt);
     drone.vx = (drone.vx + ax * dt) * dragFactor;
-    drone.vy = (drone.vy + (ch.grav + ay) * dt) * dragFactor;
+    drone.vy = (drone.vy + (GRAVITY + ay) * dt) * dragFactor;
 
     const maxUp = drone.overdrive > 0 ? MAX_VY_UP * 1.3 : MAX_VY_UP;
     drone.vx = mx(-MAX_VX, mn(MAX_VX, drone.vx));
@@ -1488,7 +1439,6 @@
         if (core.taken) continue;
         if (M.hypot(drone.x - core.x, drone.y - core.y) < drone.r + 6) {
           core.taken = true;
-          totalCoresSaved++;
           drone.comboCores++;
           drone.pressure = mn(drone.maxPsi, drone.pressure + 25);
           sfxTone(440, 880, 0.14, 'square', 0.1);
@@ -1509,7 +1459,7 @@
             drone.pressure = drone.maxPsi;
             drone.purge = 0;
             bannerText = '!MODO OVERDRIVE!';
-            levelBannerTimer = 110;
+            levelBannerTimer = 95;
             screenShake = 8;
             chromaTimer = 14;
             sfxTone(523.2, 1046.5, 0.3, 'square', 0.12);
@@ -1558,18 +1508,12 @@
     if (!boss.active && maxMeters >= nextSurgeMeters) {
       nextSurgeMeters += 90;
       surgeTimer = 300;
-      bannerText = '!SOBRECARGA TERMICA!';
-      levelBannerTimer = 130;
       playGateWarning();
     }
 
     const newDiff = getDiffAtMeters(maxMeters);
     if (newDiff > diffLevel) {
       diffLevel = newDiff;
-      if (surgeTimer <= 0 && !boss.active) {
-        bannerText = '!DIFICULTAD NV.' + diffLevel + '!';
-        levelBannerTimer = 100;
-      }
       sfxTone(330, 660, 0.22, 'square', 0.09);
     }
 
@@ -1577,7 +1521,6 @@
     // 1. Reducida en un 35% respecto a la versión anterior por cada dificultad
     // 2. SE DETIENE POR COMPLETO si el Jefe de Zona está activo!
     if (boss.active) {
-      // Mantener la lava congelada a distancia segura en el fondo mientras dura el combate de jefe
       lavaY = mx(lavaY, camY + H + 28);
     } else {
       const baseLavaStep = 0.225 + (diffLevel - 1) * 0.052 + mn(0.11, elapsedTime * 0.0012);
@@ -1598,7 +1541,7 @@
   }
 
   // =========================================================================
-  // 10. RENDERIZADO PROCEDURAL MULTIBIOMA, JEFES, GHOST Y CRT
+  // 10. RENDERIZADO PROCEDURAL MULTIBIOMA, LINEAS DE DIFICULTAD, JEFES Y UI
   // =========================================================================
   function drawBackground(camY, biome) {
     fR(0, 0, W, H, damageFlash > 0 ? UI_COL.redDark : biome.bg);
@@ -1666,7 +1609,6 @@
     if (!boss.active) return;
     const sy = (boss.y - camY) | 0;
 
-    // Dibujar proyectiles del jefe
     for (let i = 0; i < boss.shots.length; i++) {
       const s = boss.shots[i];
       fArc(s.x, s.y - camY, s.r, ((elapsedTime * 20) | 0) & 1 ? UI_COL.yellow : biome.lavaTop);
@@ -1676,7 +1618,6 @@
     ctx.translate(boss.x, sy);
     ctx.rotate(elapsedTime * (boss.type === 3 ? -4 : 2.2));
 
-    // Corona exterior dentada del Jefe
     const teeth = 16;
     ctx.beginPath();
     for (let i = 0; i < teeth; i++) {
@@ -1693,13 +1634,11 @@
     ctx.strokeStyle = UI_COL.yellow;
     ctx.stroke();
 
-    // Chasis blindado interior y ojo reactor del Jefe
     fArc(0, 0, boss.r - 5, UI_COL.black);
     fArc(0, 0, 6, boss.hitFlash > 0 ? UI_COL.red : biome.lavaTop);
     fR(-2, -2, 4, 4, UI_COL.yellow);
     ctx.restore();
 
-    // Barra de vida del Jefe sobre él
     const bw = 42;
     const bx = (boss.x - (bw >> 1)) | 0;
     const by = sy - boss.r - 11;
@@ -1722,6 +1661,34 @@
   }
 
   function drawWorld(camY, biome) {
+    // 1. Dibujar líneas horizontales de cambio de Dificultad (cada 25m) y línea de Jefe
+    const minM = mx(25, fl(getHeightMetersAtY(camY + H) / 25) * 25);
+    const maxM = getHeightMetersAtY(camY) + 25;
+    for (let m = minM; m <= maxM; m += 25) {
+      const sy = (startY - m * 12 - camY) | 0;
+      if (sy >= 25 && sy <= H) {
+        const passed = maxMeters >= m;
+        const lCol = passed ? UI_COL.green : UI_COL.orange;
+        for (let lx = WALL_LEFT + 2; lx < WALL_RIGHT - 4; lx += 12) {
+          fR(lx, sy, 7, 1, lCol);
+        }
+        fR((W >> 1) - 44, sy - 4, 88, 9, UI_COL.black);
+        drawText('DIFICULTAD NV.' + (1 + m / 25), W >> 1, sy - 2, lCol, 1, 1);
+      }
+    }
+
+    if (!boss.active) {
+      const bsy = (startY - nextBossMeters * 12 - camY) | 0;
+      if (bsy >= 25 && bsy <= H) {
+        for (let lx = WALL_LEFT + 2; lx < WALL_RIGHT - 4; lx += 10) {
+          fR(lx, bsy - 1, 6, 3, UI_COL.red);
+        }
+        fR((W >> 1) - 50, bsy - 4, 100, 9, UI_COL.black);
+        drawText('! JEFE A ' + nextBossMeters + 'M !', W >> 1, bsy - 2, UI_COL.yellow, 1, 1);
+      }
+    }
+
+    // 2. Dibujar plataformas, compuertas, chorros, núcleos y sierras
     for (let c = 0; c < activeChunks.length; c++) {
       const chunk = activeChunks[c];
 
@@ -1754,7 +1721,6 @@
               fR(rx, sy1, 4, 1, UI_COL.ice);
             }
           }
-          // Dibujar Muelle Neumático (Jump Pad)
           if (p.spring) {
             const mxMid = ((p.x1 + p.x2) >> 1) - 6;
             fR(mxMid, sy1 - 4, 12, 4, UI_COL.yellow);
@@ -1806,7 +1772,6 @@
 
   function drawDrone(camY) {
     if (drone.invuln > 0 && ((drone.invuln >> 1) & 1)) return;
-    const ch = CHASSIS[selectedChassis];
 
     ctx.save();
     ctx.translate(drone.x, drone.y - camY);
@@ -1832,12 +1797,12 @@
       drone.overdrive > 0
         ? UI_COL.gold
         : drone.purge > 0
-        ? ((drone.purge >> 2) & 1 ? UI_COL.red : ch.bodyCol)
+        ? ((drone.purge >> 2) & 1 ? UI_COL.red : UI_COL.brass)
         : drone.cooling
         ? UI_COL.cyan
-        : ch.bodyCol
+        : UI_COL.brass
     );
-    fArc(-2, -2, drone.r * 0.55, drone.overdrive > 0 ? UI_COL.yellow : drone.cooling ? UI_COL.ice : ch.hiCol);
+    fArc(-2, -2, drone.r * 0.55, drone.overdrive > 0 ? UI_COL.yellow : drone.cooling ? UI_COL.ice : UI_COL.gold);
     fR(-2, -drone.r - 2, 4, 2, UI_COL.copper);
     fArc(0, 0, 3.6, UI_COL.black);
 
@@ -1871,18 +1836,15 @@
   function drawCRT() {
     if (!crtEnabled && chromaTimer <= 0) return;
 
-    // Aberración cromática breve en impactos / Overdrive / Slam
     if (chromaTimer > 0) {
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.14)';
-      ctx.fillRect(0, 0, 4, H);
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.14)';
-      ctx.fillRect(W - 4, 0, 4, H);
+      fR(0, 0, 4, H, 'rgba(239, 68, 68, 0.14)');
+      fR(W - 4, 0, 4, H, 'rgba(56, 189, 248, 0.14)');
     }
 
     if (crtEnabled) {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
       for (let y = 0; y < H; y += 2) {
-        ctx.fillRect(0, y, W, 1);
+        fR(0, y, W, 1);
       }
     }
   }
@@ -1891,6 +1853,7 @@
     fR(0, 0, W, 25, UI_COL.black);
     fR(0, 24, W, 1, biome.trim);
 
+    // Columna Izquierda: Presión (PSI) y Vida (HP)
     drawText('PSI', 5, 4, UI_COL.white, 1);
     fR(5, 12, 56, 7, UI_COL.dark);
 
@@ -1909,42 +1872,78 @@
     drawText('HP:', 30, 4, UI_COL.gray, 1);
     for (let i = 0; i < 3; i++) fR(48 + i * 7, 4, 5, 5, i < drone.hp ? UI_COL.yellow : UI_COL.dark);
 
-    drawText('OD:', 66, 13, UI_COL.gold, 1);
-    for (let i = 0; i < 3; i++) fR(84 + i * 7, 13, 5, 5, drone.overdrive > 0 || i < drone.comboCores ? UI_COL.yellow : UI_COL.dark);
+    // Columna Central: Nivel, Overdrive e Indicador de Disponibilidad de Habilidad [ESPACIO] (SLAM)
+    drawText('NV:' + diffLevel, 72, 4, UI_COL.orange, 1);
+    drawText('OD:', 112, 4, UI_COL.gold, 1);
+    for (let i = 0; i < 3; i++) fR(130 + i * 7, 4, 5, 5, drone.overdrive > 0 || i < drone.comboCores ? UI_COL.yellow : UI_COL.dark);
 
-    drawText('NV:' + diffLevel, 76, 4, UI_COL.orange, 1);
-    drawText(currentFps + 'FPS', 118, 4, UI_COL.gray, 1);
+    const slamReady = drone.purge <= 0 && drone.slamCd <= 0 && (drone.pressure >= 25 || drone.overdrive > 0);
+    const slamRatio = drone.slamCd > 0 ? 1 - drone.slamCd / SLAM_MAX_CD : mn(1, drone.pressure / 25);
+    fR(72, 12, 92, 7, UI_COL.dark);
+    fR(73, 13, fl(slamRatio * 90), 5, slamReady ? UI_COL.green : UI_COL.rust);
+    drawText(
+      slamReady ? 'ESP:SLAM LISTO' : drone.slamCd > 0 ? 'ESP:RECARGANDO' : 'ESP:25 PSI',
+      118,
+      13,
+      slamReady ? UI_COL.white : UI_COL.gray,
+      1,
+      1
+    );
+
+    // Columna Derecha: Altura y Récord
     drawText('ALT:' + maxMeters + 'M', 251, 4, UI_COL.yellow, 1, 2);
     drawText('TOP:' + mx(highScore, maxMeters) + 'M', 251, 13, UI_COL.gray, 1, 2);
 
-    if (levelBannerTimer > 0 && ((levelBannerTimer >> 2) & 1)) {
-      drawText(bannerText, W >> 1, 30, UI_COL.yellow, 1, 1);
-    } else if (boss.active) {
-      drawText('JEFE: ' + BIOMES[boss.type].bossName + ' (LAVA PARADA)', W >> 1, 30, UI_COL.red, 1, 1);
-    } else if (surgeTimer > 0 && (((elapsedTime * 10) | 0) & 1)) {
-      drawText('!SOBRECARGA TERMICA ACTIVA!', W >> 1, 30, UI_COL.orange, 1, 1);
-    } else {
+    // RANURA 1 (Superior): Barra exclusiva del Jefe cuando está activo (sin parpadeos ni solapamientos)
+    let nextAlertY = 27;
+    if (boss.active) {
+      fR(WALL_LEFT, nextAlertY, WALL_RIGHT - WALL_LEFT, 11, 'rgba(6, 9, 15, 0.88)');
+      drawText('JEFE: ' + BIOMES[boss.type].bossName + ' (LAVA PARADA)', W >> 1, nextAlertY + 3, UI_COL.red, 1, 1);
+      nextAlertY += 13;
+    }
+
+    // RANURA 2 (Sub-barra de estado): Eventos breves o Sobrecarga Térmica con fondo sólido propio
+    if (levelBannerTimer > 0) {
+      fR(36, nextAlertY, W - 72, 11, 'rgba(6, 9, 15, 0.86)');
+      drawText(bannerText, W >> 1, nextAlertY + 3, UI_COL.yellow, 1, 1);
+    } else if (surgeTimer > 0) {
+      fR(28, nextAlertY, W - 56, 11, 'rgba(6, 9, 15, 0.86)');
+      drawText('!SOBRECARGA TERMICA ACTIVA!', W >> 1, nextAlertY + 3, UI_COL.orange, 1, 1);
+    }
+
+    // RANURA 3 (Inferior): Alerta dedicada de proximidad del Magma junto al borde inferior (nunca pisa las alertas superiores)
+    if (!boss.active) {
       const lavaDistM = mx(0, fl((lavaY - drone.y) / 12));
-      if (lavaDistM < 10 && ((elapsedTime * 8) | 0) % 2 === 0) {
-        drawText('!MAGMA A ' + lavaDistM + 'M!', W >> 1, 30, UI_COL.red, 1, 1);
+      if (lavaDistM < 12) {
+        fR(62, H - 15, W - 124, 11, 'rgba(6, 9, 15, 0.9)');
+        drawText(
+          '! MAGMA A ' + lavaDistM + 'M !',
+          W >> 1,
+          H - 12,
+          ((elapsedTime * 10) | 0) & 1 ? UI_COL.red : UI_COL.yellow,
+          1,
+          1
+        );
       }
     }
   }
 
   function drawMenu() {
-    drawBackground(elapsedTime * -12, BIOMES[((elapsedTime * 0.15) | 0) & 3]);
-    fR(10, 10, W - 20, H - 20, 'rgba(6, 9, 15, 0.92)');
+    const biome = BIOMES[((elapsedTime * 0.15) | 0) & 3];
+    drawBackground(elapsedTime * -12, biome);
+
+    // Ventana emergente limpia tipo Tutorial / Inicio Rápido
+    fR(20, 20, W - 40, H - 40, 'rgba(6, 9, 15, 0.94)');
     ctx.strokeStyle = UI_COL.brass;
     ctx.lineWidth = 2;
-    ctx.strokeRect(11, 11, W - 22, H - 22);
+    ctx.strokeRect(21, 21, W - 42, H - 42);
 
-    drawText('STEAM HOPPER', W >> 1, 20, UI_COL.gold, 2, 1);
-    drawText('BOSS & HIGH-OCTANE 240FPS', W >> 1, 35, UI_COL.cyan, 1, 1);
+    drawText('STEAM HOPPER', W >> 1, 30, UI_COL.gold, 2, 1);
 
     drone.x = W >> 1;
-    drone.y = 58 + sn(elapsedTime * 3) * 3;
-    drone.vx = cs(elapsedTime * 1.8) * 1.2;
-    drone.vy = sn(elapsedTime * 3) * 0.5;
+    drone.y = 58 + sn(elapsedTime * 3) * 2.5;
+    drone.vx = cs(elapsedTime * 1.8) * 1.1;
+    drone.vy = sn(elapsedTime * 3) * 0.4;
     drone.theta = drone.vx * 0.12;
     drone.leftOn = sn(elapsedTime * 3) < 0;
     drone.rightOn = sn(elapsedTime * 3) < 0.2;
@@ -1952,45 +1951,51 @@
     drone.overdrive = 0;
     drawDrone(0);
 
-    const ch = CHASSIS[selectedChassis];
-    drawText('CHASIS [1-3]: ' + ch.name, W >> 1, 78, UI_COL.yellow, 1, 1);
-    drawText(ch.desc, W >> 1, 88, UI_COL.ice, 1, 1);
-    drawText('A/D : TOBERAS | AMBAS : SUBIR', W >> 1, 104, UI_COL.white, 1, 1);
-    drawText('ABAJO/S/ESP : SLAM DANA JEFES', W >> 1, 115, UI_COL.cyan, 1, 1);
-    drawText('ROZAR SIERRAS = +8 PSI GRAZE', W >> 1, 126, UI_COL.gold, 1, 1);
-    drawText('JEFES EN 80M/170M DETIENEN LAVA', W >> 1, 137, UI_COL.red, 1, 1);
-    drawText('RECORD:' + highScore + 'M | NUCLEOS:' + totalCoresSaved, W >> 1, 154, UI_COL.green, 1, 1);
-    drawText('SEMILLA:' + seed + ' [R] | CRT [C] | [M]', W >> 1, 166, UI_COL.gray, 1, 1);
+    // Caja de Tutorial concisa
+    fR(28, 76, W - 56, 62, UI_COL.dark);
+    drawText('CONTROLES BASICOS:', W >> 1, 82, UI_COL.cyan, 1, 1);
+    drawText('A / D : PROPULSORES (AMBOS = SUBIR)', W >> 1, 95, UI_COL.white, 1, 1);
+    drawText('ESPACIO : ONDA SLAM (USA 25 PSI)', W >> 1, 108, UI_COL.yellow, 1, 1);
+    drawText('POSARSE EN VIGAS RECARGA PRESION', W >> 1, 121, UI_COL.green, 1, 1);
 
-    if (((elapsedTime * 3) | 0) % 2 === 0) {
-      drawText('ESPACIO O TOCA PARA INICIAR', W >> 1, 194, UI_COL.orange, 1, 1);
-    }
+    drawText('ZONA INICIAL: ' + BIOMES[0].name, W >> 1, 147, UI_COL.gray, 1, 1);
+    drawText('RECORD MAXIMO: ' + highScore + 'M', W >> 1, 159, UI_COL.gold, 1, 1);
+
+    // Botón interactivo "JUGAR YA"
+    const btnCol = ((elapsedTime * 3) | 0) & 1 ? UI_COL.orange : UI_COL.rust;
+    fR(64, 176, W - 128, 22, btnCol);
+    ctx.strokeStyle = UI_COL.yellow;
+    ctx.strokeRect(64, 176, W - 128, 22);
+    drawText('JUGAR YA [ESP]', W >> 1, 185, UI_COL.white, 1, 1);
   }
 
   function drawGameOver() {
-    fR(16, 40, W - 32, 160, 'rgba(6, 9, 15, 0.88)');
+    // Ventana emergente minimalista de Fin de Partida
+    fR(24, 42, W - 48, 154, 'rgba(6, 9, 15, 0.94)');
     ctx.strokeStyle = UI_COL.red;
     ctx.lineWidth = 2;
-    ctx.strokeRect(17, 41, W - 34, 158);
+    ctx.strokeRect(25, 43, W - 50, 152);
 
-    drawText('FIN DE PARTIDA', W >> 1, 52, UI_COL.orange, 2, 1);
-    drawText(deathReason, W >> 1, 74, UI_COL.red, 1, 1);
-    drawText('ZONA: ' + BIOMES[getBiomeIndex()].name, W >> 1, 92, UI_COL.cyan, 1, 1);
-    drawText('ALTURA : ' + maxMeters + 'M (NV.' + diffLevel + ')', W >> 1, 106, UI_COL.white, 1, 1);
-    drawText('RECORD : ' + highScore + 'M | NUCLEOS: ' + totalCoresSaved, W >> 1, 120, UI_COL.yellow, 1, 1);
-    drawText('CHASIS [1-3]: ' + CHASSIS[selectedChassis].name, W >> 1, 136, UI_COL.green, 1, 1);
+    drawText('FIN DE PARTIDA', W >> 1, 54, UI_COL.orange, 2, 1);
+    drawText(deathReason, W >> 1, 76, UI_COL.red, 1, 1);
 
-    if (((elapsedTime * 3) | 0) % 2 === 0) {
-      drawText('ESPACIO / ENTER REINTENTAR', W >> 1, 168, UI_COL.white, 1, 1);
-    }
+    fR(34, 90, W - 68, 52, UI_COL.dark);
+    drawText('ZONA: ' + BIOMES[getBiomeIndex()].name, W >> 1, 98, UI_COL.cyan, 1, 1);
+    drawText('ALTURA MAXIMA: ' + maxMeters + 'M (NV.' + diffLevel + ')', W >> 1, 112, UI_COL.white, 1, 1);
+    drawText('RECORD: ' + highScore + 'M', W >> 1, 126, UI_COL.yellow, 1, 1);
+
+    // Botón interactivo "JUGAR YA"
+    const btnCol = ((elapsedTime * 3) | 0) & 1 ? UI_COL.orange : UI_COL.rust;
+    fR(64, 156, W - 128, 22, btnCol);
+    ctx.strokeStyle = UI_COL.yellow;
+    ctx.strokeRect(64, 156, W - 128, 22);
+    drawText('JUGAR YA [ESP]', W >> 1, 165, UI_COL.white, 1, 1);
   }
 
   // =========================================================================
   // 11. BUCLE PRINCIPAL DESACOPLADO POR DELTA-TIME (TOPE 240 FPS)
   // =========================================================================
   let lastFrameTime = performance.now();
-  let fpsTimer = lastFrameTime;
-  let fpsFrames = 0;
 
   function frame(now) {
     requestAnimationFrame(frame);
@@ -1998,13 +2003,6 @@
     const elapsed = now - lastFrameTime;
     if (elapsed < MIN_FRAME_DELTA) return;
     lastFrameTime = now;
-
-    fpsFrames++;
-    if (now - fpsTimer >= 500) {
-      currentFps = mn(240, M.round((fpsFrames * 1000) / (now - fpsTimer)));
-      fpsFrames = 0;
-      fpsTimer = now;
-    }
 
     const dt = mn(elapsed, 33.33) / 16.666;
 
