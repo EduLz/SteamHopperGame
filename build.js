@@ -288,16 +288,157 @@ function minifyJS(code) {
     slamCd: '_sCd',
     slamReady: '_sRy',
     slamRatio: '_sRt',
-    nextAlertY: '_nAY'
+    nextAlertY: '_nAY',
+    HULLS: '_HL2',
+    SKILLS: '_SK',
+    FONT_CHARS: '_FC',
+    FONT_B36: '_FB',
+    DIFF_STEP: '_DS',
+    drawToothed: '_dTt',
+    drawGarageBox: '_dGb',
+    triggerActiveSkill: '_tAS',
+    isHullUnlocked: '_iHU',
+    isSkillUnlocked: '_iSU',
+    bossUnlockMask: '_bUM',
+    selectedHull: '_sHl',
+    selectedSkill: '_sSk',
+    playerShots: '_pSh',
+    bossBuffs: '_bBf',
+    menuTab: '_mTb',
+    arenaY: '_aY',
+    shield: '_shd',
+    platTop: '_pTp',
+    gearCol: '_gCl',
+    gearRim: '_gRm',
+    buffText: '_bfT',
+    grazeBonus: '_gBn',
+    psiUse: '_pUs',
+    dmgFactor: '_dFc',
+    rechargeBoost: '_rBs',
+    ecoFactor: '_eFc',
+    airRegen: '_aRg',
+    hitByShot: '_hBS',
+    plat: '_plt',
+    rOut: '_rO2',
+    rIn: '_rI',
+    fillCol: '_fC',
+    strokeCol: '_sCl',
+    cand: '_cd',
+    nextSk: '_nSk',
+    unl: '_ul',
+    sel: '_sl',
+    btnCol: '_btC',
+    bsy: '_bY2',
+    minM: '_mnM',
+    maxM: '_mxM',
+    lCol: '_lCl',
+    topY: '_tpY',
+    rect: '_rc',
+    relX: '_rlX',
+    relY: '_rlY',
+    spd: '_sp2',
+    ang: '_an',
+    rad: '_rd2',
+    minW: '_mnW',
+    maxW: '_mxW',
+    minX: '_mnX',
+    maxX: '_mxX',
+    slot: '_slt',
+    bType: '_bTp',
+    hull: '_hl',
+    cost: '_cst',
+    desc: '_dsc',
+    req: '_rq',
+    body: '_bd',
+    bIdx: '_bIx',
+    core: '_cr2',
+    size: '_sz2',
+    sy1: '_y1',
+    sy2: '_y2',
+    px1: '_x1',
+    mkBiome: '_mB',
+    getMaxSlamCd: '_gSC',
+    breakShield: '_bSh',
+    enrage: '_enr',
+    pat: '_pt3',
+    maxCd: '_mCd',
+    defeatedCount: '_dCt2',
+    hsl: '_hs',
+    fArc: '_fA',
+    PI2: '_P2',
+    lcg: '_lc',
+    idx: '_ix',
+    red: '_rd3',
+    ice: '_ic',
+    dark: '_dk',
+    step: '_st2',
+    bar: '_br2',
+    sub: '_sb2',
+    osc: '_os',
+    src: '_sr2',
+    flt: '_fl2',
+    dur: '_dr',
+    freq: '_fq',
+    dist: '_ds',
+    phi: '_ph2',
+    col: '_cl4',
+    str: '_st3',
+    m2f: '_mf',
+    h1: '_h1',
+    h2: '_h2',
+    ctx: '_cx',
+    canvas: '_cv',
+    keys: '_ks',
+    seed: '_sd3',
+    DRAG: '_DG',
+    hpLoss: '_hL',
+    reason: '_rsn',
+    dmg: '_dm2',
+    hi: '_hi2',
+    hp: '_hp'
   };
 
-  let mangled = tokenized;
-  for (const [longName, shortName] of Object.entries(idMap)) {
-    mangled = mangled.replace(new RegExp(`\\b${longName}\\b`, 'g'), shortName);
+  // Asignar automáticamente los nombres más cortos posibles (1 y 2 caracteres) según frecuencia de aparición
+  const keysList = Object.keys(idMap);
+  const freqMap = {};
+  for (const k of keysList) {
+    const matches = tokenized.match(new RegExp(`\\b${k}\\b`, 'g'));
+    freqMap[k] = matches ? matches.length : 0;
+  }
+  keysList.sort((a, b) => freqMap[b] - freqMap[a]);
+
+  // Generar pool seguro de identificadores cortos (1 char libre y 2 chars)
+  const usedSingle = new Set(['W', 'H', 'M', 'G', 'R', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'w', 'x', 'y']);
+  const shortPool = [];
+  const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz$_';
+  const alnum = alpha + '0123456789';
+  for (const ch of alpha) {
+    if (!usedSingle.has(ch)) shortPool.push(ch);
+  }
+  for (const c1 of '_$ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz') {
+    for (const c2 of alnum) {
+      const cand = c1 + c2;
+      if (!['if', 'in', 'do', 'fl', 'rn', 'mx', 'mn', 'sn', 'cs', 'PI', 'fR', 'AC', 'sr', 'dt', 'tx', 'ty', 'vx', 'vy', 'ax', 'ay', 'dx', 'dy', 'nx', 'ny', 'vn', 'd2', 'x1', 'y1', 'x2', 'y2', 'gx', 'gy', 'sy', 'sx', 'pw', 'ph', 'gw', 'bx', 'by', 'bw', 'px', 'py', 'sz', 'lv', 'sk', 'ps', 'ch', 'a1', 'a2', 'f0', 'f1', 'v0'].includes(cand)) {
+        shortPool.push(cand);
+      }
+    }
   }
 
-  // Reemplazar const por let para ahorrar 2 bytes por declaración
-  mangled = mangled.replace(/\bconst\b/g, 'let');
+  let mangled = tokenized;
+  for (let i = 0; i < keysList.length; i++) {
+    const longName = keysList[i];
+    const shortName = shortPool[i];
+    mangled = mangled.replace(new RegExp(`\\b${longName}\\b`, 'g'), () => shortName);
+  }
+
+  // Reemplazar const por let, booleanos y decimales con 0 inicial
+  mangled = mangled
+    .replace(/\bconst\b/g, 'let')
+    .replace(/\btrue\b/g, '!0')
+    .replace(/\bfalse\b/g, '!1')
+    .replace(/\b0\.(\d+)/g, '.$1')
+    .replace(/===/g, '==')
+    .replace(/!==/g, '!=');
 
   // 4. Limpiar espacios y saltos de línea redundantes
   let compacted = mangled
@@ -311,6 +452,7 @@ function minifyJS(code) {
   while (/\blet ([^;{}\n]+);let /.test(compacted)) {
     compacted = compacted.replace(/\blet ([^;{}\n]+);let /g, 'let $1,');
   }
+  compacted = compacted.replace(/;\}/g, '}');
 
   // 5. Restaurar cadenas originales intactas
   return compacted.replace(/__STR_(\d+)__/g, (_, idx) => strings[Number(idx)]);
