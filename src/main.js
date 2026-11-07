@@ -14,39 +14,81 @@
   const H = 240;
   const DT = 1 / 60;
 
-  // Paleta de 16 colores inspirada en NES (Óxido, Cobre, Carbón, Incandescente, Acero Frío)
+  // Paleta de 16 colores inspirada en NES
   const PAL = [
     '#0d0a0b', // 0: Negro carbón profundo (Fondo pozo)
     '#1c1618', // 1: Gris hollín oscuro (Muros fondo)
     '#2e2224', // 2: Óxido sombrío (Ladrillos / Estructuras)
-    '#4a3228', // 3: Marrón fundición (Vigas calientes)
+    '#4a3228', // 3: Marrón fundición (Vigas calientes / Cierres)
     '#7a4832', // 4: Cobre envejecido (Bordes vigas / Engranajes)
     '#b56c3a', // 5: Latón industrial (Cuerpo del dron)
     '#e09f50', // 6: Latón brillante (Reflejos del dron)
     '#f4d27a', // 7: Amarillo chispa (Chispas / Alertas)
-    '#8c1d18', // 8: Rojo magma oscuro (Lava profunda)
-    '#d9381e', // 9: Naranja incandescente (Lava media / Peligro)
+    '#8c1d18', // 8: Rojo magma oscuro (Lava profunda / Peligro)
+    '#d9381e', // 9: Naranja incandescente (Lava media / Daño)
     '#ff7722', // 10: Naranja fuego brillante (Superficie lava / Purga)
     '#284b5c', // 11: Acero azulado oscuro (Viga de enfriamiento base)
     '#4789a8', // 12: Cian industrial (Viga de enfriamiento superficie)
     '#8cd4f5', // 13: Hielo / Escarcha brillante (Indicador recarga)
-    '#9ea3a8', // 14: Gris vapor medio (Humo / Engranajes)
+    '#9ea3a8', // 14: Gris vapor medio (Humo / Sierras acero)
     '#f0f4f8'  // 15: Blanco humo puro (Texto / Vapor alta presión)
   ];
 
   // =========================================================================
-  // 2. TIPOGRAFÍA EMBEBIDA (MINI-FONT BITMAP 3x5 - 15 BITS)
+  // 2. TIPOGRAFÍA EMBEBIDA DE ALTA LEGIBILIDAD (5x5 BITMAP - 25 BITS)
   // =========================================================================
+  // Helper para empaquetar 5 filas de 5 bits en un entero de 25 bits
+  const G = (r0, r1, r2, r3, r4) =>
+    (r0 << 20) | (r1 << 15) | (r2 << 10) | (r3 << 5) | r4;
+
   const FONT = {
-    '0': 0x7B6F, '1': 0x2497, '2': 0x73E7, '3': 0x73CF, '4': 0x5BC9,
-    '5': 0x79CF, '6': 0x79EF, '7': 0x7249, '8': 0x7BEF, '9': 0x7BCF,
-    'A': 0x77EB, 'B': 0x73EB, 'C': 0x7247, 'D': 0x6B6E, 'E': 0x79E7,
-    'F': 0x79E4, 'G': 0x726F, 'H': 0x5BEB, 'I': 0x7497, 'J': 0x126F,
-    'K': 0x5AEB, 'L': 0x4927, 'M': 0x5FEB, 'N': 0x7B6B, 'O': 0x7B6F,
-    'P': 0x77E4, 'Q': 0x7B7B, 'R': 0x77EA, 'S': 0x79CF, 'T': 0x7492,
-    'U': 0x5B6F, 'V': 0x5B6A, 'W': 0x5B7F, 'X': 0x5AEA, 'Y': 0x5ACA,
-    'Z': 0x72A7, '-': 0x01C0, ':': 0x0410, '.': 0x0002, '%': 0x4A91,
-    '/': 0x1294, '!': 0x2482, '[': 0x6926, ']': 0x324B, '+': 0x05D0
+    '0': G(14, 19, 21, 25, 14),
+    '1': G(4, 12, 4, 4, 14),
+    '2': G(14, 17, 6, 8, 31),
+    '3': G(30, 1, 14, 1, 30),
+    '4': G(18, 18, 31, 2, 2),
+    '5': G(31, 16, 30, 1, 30),
+    '6': G(15, 16, 30, 17, 14),
+    '7': G(31, 1, 2, 4, 4),
+    '8': G(14, 17, 14, 17, 14),
+    '9': G(14, 17, 15, 1, 30),
+    'A': G(14, 17, 31, 17, 17),
+    'B': G(30, 17, 30, 17, 30),
+    'C': G(15, 16, 16, 16, 15),
+    'D': G(30, 17, 17, 17, 30),
+    'E': G(31, 16, 30, 16, 31),
+    'F': G(31, 16, 30, 16, 16),
+    'G': G(15, 16, 19, 17, 15),
+    'H': G(17, 17, 31, 17, 17),
+    'I': G(14, 4, 4, 4, 14),
+    'J': G(7, 2, 2, 18, 12),
+    'K': G(17, 18, 28, 18, 17),
+    'L': G(16, 16, 16, 16, 31),
+    'M': G(17, 27, 21, 17, 17),
+    'N': G(17, 25, 21, 19, 17),
+    'O': G(14, 17, 17, 17, 14),
+    'P': G(30, 17, 30, 16, 16),
+    'Q': G(14, 17, 21, 18, 13),
+    'R': G(30, 17, 30, 18, 17),
+    'S': G(15, 16, 14, 1, 30),
+    'T': G(31, 4, 4, 4, 4),
+    'U': G(17, 17, 17, 17, 14),
+    'V': G(17, 17, 17, 10, 4),
+    'W': G(17, 17, 21, 27, 17),
+    'X': G(17, 10, 4, 10, 17),
+    'Y': G(17, 10, 4, 4, 4),
+    'Z': G(31, 2, 4, 8, 31),
+    '-': G(0, 0, 14, 0, 0),
+    ':': G(0, 4, 0, 4, 0),
+    '.': G(0, 0, 0, 0, 4),
+    '%': G(25, 2, 4, 8, 19),
+    '/': G(1, 2, 4, 8, 16),
+    '!': G(4, 4, 4, 0, 4),
+    '[': G(14, 8, 8, 8, 14),
+    ']': G(14, 2, 2, 2, 14),
+    '(': G(6, 8, 8, 8, 6),
+    ')': G(12, 2, 2, 2, 12),
+    '+': G(0, 4, 14, 4, 0)
   };
 
   const canvas = document.getElementById('c');
@@ -58,24 +100,30 @@
   function drawChar(char, x, y, color, scale = 1) {
     const glyph = FONT[char] || 0;
     if (!glyph) return;
+    // Sombra negra de 1px para máximo contraste y legibilidad
+    ctx.fillStyle = PAL[0];
+    for (let i = 0; i < 25; i++) {
+      if ((glyph >> (24 - i)) & 1) {
+        const px = (x + (i % 5) * scale) | 0;
+        const py = (y + ((i / 5) | 0) * scale) | 0;
+        ctx.fillRect(px + 1, py + 1, scale, scale);
+      }
+    }
     ctx.fillStyle = color;
-    for (let i = 0; i < 15; i++) {
-      if ((glyph >> (14 - i)) & 1) {
-        ctx.fillRect(
-          (x + (i % 3) * scale) | 0,
-          (y + ((i / 3) | 0) * scale) | 0,
-          scale,
-          scale
-        );
+    for (let i = 0; i < 25; i++) {
+      if ((glyph >> (24 - i)) & 1) {
+        const px = (x + (i % 5) * scale) | 0;
+        const py = (y + ((i / 5) | 0) * scale) | 0;
+        ctx.fillRect(px, py, scale, scale);
       }
     }
   }
 
   function drawText(str, x, y, color, scale = 1, align = 0) {
     const s = String(str).toUpperCase();
-    const step = 4 * scale;
+    const step = 6 * scale;
     const totalW = s.length * step - scale;
-    let startX = align === 1 ? x - (totalW >> 1) : align === 2 ? x - totalW : x;
+    const startX = align === 1 ? x - (totalW >> 1) : align === 2 ? x - totalW : x;
     for (let i = 0; i < s.length; i++) {
       if (s[i] !== ' ') {
         drawChar(s[i], startX + i * step, y, color, scale);
@@ -95,7 +143,6 @@
   }
 
   function lcg() {
-    // X_{n+1} = (a * X_n + c) mod m
     rngState = (1664525 * rngState + 1013904223) >>> 0;
     return rngState / 4294967296;
   }
@@ -114,7 +161,6 @@
   let steamCooldown = 0;
   let muted = false;
 
-  // Escala menor pentatónica (La menor: A, C, D, E, G) en frecuencias Hz
   const LEAD_SEQ = [
     220, 0, 261.6, 293.7, 329.6, 0, 392.0, 329.6,
     440, 392.0, 329.6, 293.7, 261.6, 293.7, 220, 0
@@ -132,7 +178,6 @@
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     audioCtx = new AC();
-    // Búfer algorítmico generado por código en tiempo real para el ruido blanco
     const sr = audioCtx.sampleRate;
     noiseBuf = audioCtx.createBuffer(1, sr * 0.25, sr);
     const data = noiseBuf.getChannelData(0);
@@ -141,7 +186,6 @@
     }
   }
 
-  // 5.3.1 Efecto de Vapor (Toberas): Ruido blanco + BiquadFilterNode bandpass 800Hz
   function sfxSteam(dual) {
     if (!audioCtx || muted) return;
     const now = audioCtx.currentTime;
@@ -154,7 +198,7 @@
     filter.Q.setValueAtTime(2.2, now);
 
     const gain = audioCtx.createGain();
-    gain.gain.setValueAtTime(dual ? 0.12 : 0.08, now);
+    gain.gain.setValueAtTime(dual ? 0.1 : 0.065, now);
     gain.gain.linearRampToValueAtTime(0.001, now + 0.09);
 
     src.connect(filter);
@@ -165,7 +209,6 @@
     src.stop(now + 0.09);
   }
 
-  // 5.3.2 Impacto Metálico / Rebote: Senoidal 0.08s, rampa exponencial 220Hz -> 40Hz
   function sfxBounce(intensity = 1) {
     if (!audioCtx || muted) return;
     const now = audioCtx.currentTime;
@@ -176,7 +219,7 @@
     osc.frequency.setValueAtTime(220 * Math.min(1.4, Math.max(0.8, intensity)), now);
     osc.frequency.exponentialRampToValueAtTime(40, now + 0.08);
 
-    gain.gain.setValueAtTime(Math.min(0.25, 0.12 * intensity), now);
+    gain.gain.setValueAtTime(Math.min(0.22, 0.11 * intensity), now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
 
     osc.connect(gain);
@@ -186,7 +229,6 @@
     osc.stop(now + 0.08);
   }
 
-  // Alarma de Purga de Emergencia / Tonos retro
   function sfxTone(freqStart, freqEnd, dur, type = 'square', vol = 0.08) {
     if (!audioCtx || muted) return;
     const now = audioCtx.currentTime;
@@ -203,27 +245,24 @@
     osc.stop(now + dur);
   }
 
-  // 5.3.3 Banda Sonora Procedural (Micro-Secuenciador de 16 pasos)
   function updateBGM() {
     if (!audioCtx || muted || gameState !== 1) return;
     bgmTimer++;
-    // Tempo adaptativo según cercanía de la lava
-    const stepFrames = drone.purge > 0 ? 7 : 9;
+    // El tempo acelera ligeramente conforme sube el nivel de dificultad
+    const stepFrames = Math.max(6, 11 - Math.floor(diffLevel * 0.7) - (drone.purge > 0 ? 2 : 0));
     if (bgmTimer >= stepFrames) {
       bgmTimer = 0;
       const now = audioCtx.currentTime;
       const dur = stepFrames * DT * 0.85;
 
-      // Canal 1: Onda Cuadrada (Lead)
       const leadFreq = LEAD_SEQ[bgmStep];
       if (leadFreq > 0) {
         const osc1 = audioCtx.createOscillator();
         const g1 = audioCtx.createGain();
         osc1.type = 'square';
-        // Sube una octava a partir de 200m de altura
-        const octave = maxMeters >= 200 && (bgmStep % 4 === 0) ? 2 : 1;
-        osc1.frequency.setValueAtTime(leadFreq * octave, now);
-        g1.gain.setValueAtTime(0.032, now);
+        const pitchShift = 1 + (diffLevel - 1) * 0.05;
+        osc1.frequency.setValueAtTime(leadFreq * pitchShift, now);
+        g1.gain.setValueAtTime(0.028, now);
         g1.gain.exponentialRampToValueAtTime(0.001, now + dur);
         osc1.connect(g1);
         g1.connect(audioCtx.destination);
@@ -231,14 +270,13 @@
         osc1.stop(now + dur);
       }
 
-      // Canal 2: Onda Triángulo (Bajo continuo)
       const bassFreq = BASS_SEQ[bgmStep];
       if (bassFreq > 0) {
         const osc2 = audioCtx.createOscillator();
         const g2 = audioCtx.createGain();
         osc2.type = 'triangle';
         osc2.frequency.setValueAtTime(bassFreq, now);
-        g2.gain.setValueAtTime(0.06, now);
+        g2.gain.setValueAtTime(0.055, now);
         g2.gain.exponentialRampToValueAtTime(0.002, now + dur * 0.95);
         osc2.connect(g2);
         g2.connect(audioCtx.destination);
@@ -253,7 +291,6 @@
   // =========================================================================
   // 5. SISTEMA DE PARTÍCULAS (OBJECT POOL DE 64 OBJETOS PREALOJADOS)
   // =========================================================================
-  // type: 0 = vapor (humo blanco), 1 = chispa metal (amarilla con gravedad), 2 = burbuja lava
   const POOL_SIZE = 64;
   const particles = Array.from({ length: POOL_SIZE }, () => ({
     active: false,
@@ -289,15 +326,12 @@
       p.x += p.vx;
       p.y += p.vy;
       if (p.type === 1) {
-        // Chispas con gravedad
-        p.vy += 0.18;
+        p.vy += 0.12;
       } else if (p.type === 0) {
-        // Vapor desacelera y asciende ligeramente
-        p.vx *= 0.92;
-        p.vy = p.vy * 0.92 - 0.03;
+        p.vx *= 0.9;
+        p.vy = p.vy * 0.9 - 0.02;
       } else if (p.type === 2) {
-        // Burbuja / brasa incandescente asciende
-        p.vy -= 0.04;
+        p.vy -= 0.03;
       }
       p.life--;
       if (p.life <= 0) p.active = false;
@@ -314,16 +348,13 @@
       const ratio = p.life / p.maxLife;
 
       if (p.type === 0) {
-        // Vapor (humo blanco translúcido / gris humo según vida)
         ctx.fillStyle = ratio > 0.45 ? PAL[15] : PAL[14];
         const sz = ratio > 0.6 ? p.size : Math.max(1, p.size - 1);
         ctx.fillRect(sx - (sz >> 1), sy - (sz >> 1), sz, sz);
       } else if (p.type === 1) {
-        // Chispas de metal (amarillas / naranjas)
-        ctx.fillStyle = ratio > 0.4 ? PAL[7] : PAL[10];
+        ctx.fillStyle = ratio > 0.4 ? PAL[7] : PAL[9];
         ctx.fillRect(sx, sy, p.size, p.size);
       } else {
-        // Burbujas / brasas incandescentes de lava
         ctx.fillStyle = ratio > 0.5 ? PAL[10] : PAL[9];
         ctx.fillRect(sx, sy, p.size, p.size);
       }
@@ -331,209 +362,289 @@
   }
 
   // =========================================================================
-  // 6. ESTADO DEL JUEGO, DRON Y GENERACIÓN DE CHUNKS (3 EN MEMORIA)
+  // 6. PARÁMETROS FÍSICOS CALIBRADOS (65% MÁS CONTROLADO) Y DIFICULTAD
   // =========================================================================
-  // Estados: 0 = MENU, 1 = INGAME, 2 = GAME OVER
   let gameState = 0;
   let highScore = 0;
   try {
     highScore = parseInt(localStorage.getItem('sh_hi') || '0', 10) || 0;
   } catch (_) {}
 
-  // Parámetros cinemáticos exactos de la especificación (Sección 3.1)
-  const GRAVITY_Y = 0.28;
-  const DRAG = 0.985;
-  const F_LEFT_X = 0.38;
-  const F_LEFT_Y = -0.68;
-  const F_RIGHT_X = -0.38;
-  const F_RIGHT_Y = -0.68;
-  const RESTITUTION = 0.55;
+  // Movimiento 65% más lento y controlado respecto al prototipo inicial
+  const GRAVITY_Y = 0.095;
+  const DRAG = 0.945;
+  const F_LEFT_X = 0.135;
+  const F_LEFT_Y = -0.225;
+  const F_RIGHT_X = -0.135;
+  const F_RIGHT_Y = -0.225;
+  const MAX_VX = 1.95;
+  const MAX_VY_UP = -2.15;
+  const MAX_VY_DOWN = 2.65;
+  const RESTITUTION = 0.45;
   const WALL_LEFT = 14;
   const WALL_RIGHT = W - 14;
 
   const drone = {
     x: W / 2,
-    y: 180,
+    y: 184,
     vx: 0,
     vy: 0,
     r: 7,
     theta: 0,
-    pressure: 100, // 0..100%
-    purge: 0,      // frames restantes de purga (1.2s = 72 frames)
+    pressure: 100, // Energía / Presión de caldera (0..100%)
+    hp: 3,         // Integridad del chasis (3 golpes máximos)
+    invuln: 0,     // Frames de invulnerabilidad tras daño
+    purge: 0,      // Frames de Purga de Emergencia (72 frames = 1.2s)
     cooling: false,
     grounded: false,
     leftOn: false,
     rightOn: false
   };
 
-  let startY = 180;
+  let startY = 184;
   let camY = 0;
-  let lavaY = 270;
-  let lavaStartY = 270;
+  let lavaY = 250;
   let elapsedTime = 0;
   let currentMeters = 0;
   let maxMeters = 0;
+  let diffLevel = 1;
+  let levelBannerTimer = 0;
+  let deathReason = 'CONSUMIDO POR LA LAVA';
   let screenShake = 0;
-  let flashTimer = 0;
+  let damageFlash = 0;
 
-  // Arreglo circular de exactamente 3 Chunks de 240px de altura en memoria (Sección 6)
-  // Cada chunk i cubre el rango vertical [ -i * 240, -(i - 1) * 240 ]
   let activeChunks = [];
   let topChunkIndex = -1;
 
+  // Cada 12 píxeles = 1 metro de ascenso
   function getHeightMetersAtY(y) {
-    return Math.max(0, Math.floor((startY - y) / 6));
+    return Math.max(0, Math.floor((startY - y) / 12));
   }
 
+  // Nivel de dificultad progresivo según la altura (sube cada 25m)
+  function getDiffAtMeters(m) {
+    return 1 + Math.floor(m / 25);
+  }
+
+  function applyDamage(energyLoss, hpLoss, reason) {
+    if (drone.invuln > 0) return;
+    drone.invuln = 42;
+    damageFlash = 10;
+    screenShake = 9;
+    drone.pressure = Math.max(0, drone.pressure - energyLoss);
+    if (hpLoss > 0) {
+      drone.hp = Math.max(0, drone.hp - hpLoss);
+    }
+    sfxTone(160, 45, 0.25, 'sawtooth', 0.16);
+
+    if (drone.hp <= 0) {
+      deathReason = reason || 'CHASIS DESTRUIDO';
+      triggerGameOver();
+      return;
+    }
+
+    if (drone.pressure <= 0 && drone.purge <= 0) {
+      drone.pressure = 0;
+      drone.purge = 72;
+    }
+  }
+
+  // =========================================================================
+  // 7. GENERACIÓN PROCEDIMENTAL CON CIERRES DE PARED, SIERRAS Y DIFICULTAD
+  // =========================================================================
   function generateChunk(chunkIdx) {
-    // Semilla determinista derivada del índice de chunk y la semilla global
     setSeed((seed + chunkIdx * 7919) >>> 0);
 
-    const yBottom = H - chunkIdx * H; // ej. chunk 0: 240..0, chunk 1: 0..-240
+    const yBottom = H - chunkIdx * H;
     const yTop = yBottom - H;
-    const chunkMeters = getHeightMetersAtY((yBottom + yTop) * 0.5);
 
     const platforms = [];
     const gears = [];
     const vents = [];
+    const gates = []; // Compuertas / Cierres obligatorios de pared
 
-    // Muros laterales de la chimenea industrial (AABB)
+    // Muros laterales del pozo
     platforms.push(
       { x1: 0, y1: yTop, x2: WALL_LEFT, y2: yBottom, cool: 0, wall: true },
       { x1: WALL_RIGHT, y1: yTop, x2: W, y2: yBottom, cool: 0, wall: true }
     );
 
     if (chunkIdx === 0) {
-      // Plataforma inicial de lanzamiento amplia y segura
+      // Base de lanzamiento amplia
       platforms.push({
-        x1: 76,
-        y1: 192,
-        x2: 180,
-        y2: 204,
+        x1: 72,
+        y1: 194,
+        x2: 184,
+        y2: 205,
         cool: 1,
-        wall: false
+        wall: false,
+        vx: 0
       });
     }
 
-    // Curva de dificultad dinámica según H (Sección 6):
-    // H < 100m: Vigas estáticas amplias y distancias cortas (4 vigas por chunk)
-    // 100m <= H < 300m: Escapes de vapor periódicos y engranajes pequeños
-    // H >= 300m: Engranajes dobles contrarrotativos y vigas estrechas con enfriamiento reducido
-    const numRows = 4;
-    const rowStep = H / numRows; // 60 px entre niveles
+    // 5 niveles de plataformas por chunk (48 px de separación vertical, ideal para el nuevo salto)
+    const numRows = 5;
+    const rowStep = H / numRows; // 48 px
 
     for (let r = 0; r < numRows; r++) {
-      if (chunkIdx === 0 && r === 0) continue; // Ya pusimos la base inicial
+      if (chunkIdx === 0 && r === 0) continue;
 
-      const py = Math.floor(yBottom - (r + 0.75) * rowStep + lcgRange(-6, 6));
+      const py = Math.floor(yBottom - (r + 0.75) * rowStep + lcgRange(-4, 4));
       const hMeters = getHeightMetersAtY(py);
+      const lv = getDiffAtMeters(hMeters);
 
-      // Ancho de la viga según dificultad
-      let beamW = hMeters < 100
-        ? Math.floor(lcgRange(58, 78))
-        : hMeters < 300
-        ? Math.floor(lcgRange(44, 62))
-        : Math.floor(lcgRange(34, 48));
+      // 1. Tamaño de las plataformas se reduce conforme sube el nivel de dificultad
+      const minW = Math.max(28, 66 - (lv - 1) * 7);
+      const maxW = Math.max(38, 82 - (lv - 1) * 8);
+      const beamW = Math.floor(lcgRange(minW, maxW));
 
-      // Alternar zonas izquierda/centro/derecha para exigir maniobra vectorial
-      const zone = (chunkIdx * numRows + r) % 3;
-      let minX = WALL_LEFT + 10;
-      let maxX = WALL_RIGHT - beamW - 10;
+      // Distribución horizontal alternada
+      const slot = (chunkIdx * numRows + r) % 3;
+      const minX = WALL_LEFT + 12;
+      const maxX = WALL_RIGHT - beamW - 12;
       let px;
-      if (zone === 0) {
-        px = Math.floor(lcgRange(minX, minX + (maxX - minX) * 0.45));
-      } else if (zone === 1) {
-        px = Math.floor(lcgRange(minX + (maxX - minX) * 0.55, maxX));
+      if (slot === 0) {
+        px = Math.floor(lcgRange(minX, minX + (maxX - minX) * 0.4));
+      } else if (slot === 1) {
+        px = Math.floor(lcgRange(minX + (maxX - minX) * 0.6, maxX));
       } else {
         px = Math.floor(lcgRange(minX + (maxX - minX) * 0.25, minX + (maxX - minX) * 0.75));
       }
 
-      // Factor de recarga en cornisas frías (1.0 normal = 3%/frame; 0.65 reducido en H >= 300m)
-      const coolFactor = hMeters >= 300 ? 0.65 : 1.0;
+      // Eficiencia de enfriamiento y plataformas móviles en niveles superiores
+      const coolFactor = lv >= 4 && r % 2 === 1 ? 0.55 : 1.0;
+      const moveSpeed = lv >= 2 && r === 2 && lcg() > 0.35
+        ? (lcg() > 0.5 ? 1 : -1) * Math.min(0.9, 0.35 + lv * 0.08)
+        : 0;
 
       platforms.push({
         x1: px,
         y1: py,
         x2: px + beamW,
-        y2: py + 10,
+        y2: py + 9,
+        w: beamW,
         cool: coolFactor,
-        wall: false
+        wall: false,
+        vx: moveSpeed,
+        minX: WALL_LEFT + 8,
+        maxX: WALL_RIGHT - 8
       });
 
-      // Peldaño secundario ocasional en el lado opuesto
-      if (hMeters < 220 && lcg() > 0.45) {
-        const altW = Math.floor(lcgRange(32, 46));
+      // Peldaño auxiliar en los primeros niveles
+      if (lv <= 2 && r % 2 === 1 && lcg() > 0.4) {
+        const altW = Math.floor(lcgRange(36, 48));
         const altX = px + beamW * 0.5 < W * 0.5
-          ? Math.floor(lcgRange(W * 0.54, WALL_RIGHT - altW - 8))
-          : Math.floor(lcgRange(WALL_LEFT + 8, W * 0.46 - altW));
-        const altY = py + Math.floor(lcgRange(-14, 14));
+          ? Math.floor(lcgRange(W * 0.55, WALL_RIGHT - altW - 10))
+          : Math.floor(lcgRange(WALL_LEFT + 10, W * 0.45 - altW));
+        const altY = py + Math.floor(lcgRange(-8, 8));
         platforms.push({
           x1: altX,
           y1: altY,
           x2: altX + altW,
-          y2: altY + 9,
+          y2: altY + 8,
+          w: altW,
           cool: coolFactor,
-          wall: false
+          wall: false,
+          vx: 0
         });
       }
 
-      // Escapes de vapor periódicos (H >= 100m, o demostración suave desde 60m)
-      if (hMeters >= 100 && lcg() > 0.45) {
+      // 2. Estructuras de bloqueo: Tabiques fijos de pared (Salientes obligatorios)
+      if ((chunkIdx > 0 || r >= 3) && r === 1 && lcg() > 0.25) {
+        const fromLeft = px + beamW * 0.5 > W * 0.5;
+        const barrierLen = Math.min(96, Math.floor(lcgRange(48, 62 + lv * 5)));
+        const by = py - 22;
+        platforms.push({
+          x1: fromLeft ? WALL_LEFT : WALL_RIGHT - barrierLen,
+          y1: by,
+          x2: fromLeft ? WALL_LEFT + barrierLen : WALL_RIGHT,
+          y2: by + 10,
+          cool: 0,
+          wall: true, // Bloquea el paso y obliga a rodear por el hueco abierto
+          barrier: true
+        });
+      }
+
+      // 3. Cierres obligatorios de pared (Compuertas / Pistones retráctiles)
+      if ((chunkIdx > 0 || r >= 2) && r === 3) {
+        const fromLeft = lcg() > 0.5;
+        const maxExt = Math.min(138, Math.floor(lcgRange(85, 102 + lv * 6)));
+        const period = Math.max(120, 210 - lv * 14);
+        gates.push({
+          fromLeft,
+          y1: py - 25,
+          y2: py - 15,
+          maxLen: maxExt,
+          curLen: 20,
+          period,
+          phase: Math.floor(lcgRange(0, period)),
+          state: 0 // 0: abierta, 1: cerrando, 2: bloqueada
+        });
+      }
+
+      // 4. Sierras / Engranajes dañinos (restan energía y blindaje al tocarlos)
+      if ((chunkIdx > 0 || r >= 2) && (r === 2 || (lv >= 3 && r === 4))) {
+        if (lv >= 4 && r === 4) {
+          // Sierras dobles contrarrotativas dejando paso central o lateral
+          const gapCenter = Math.floor(lcgRange(74, W - 74));
+          const rad = 12;
+          const spd = 0.05 + lv * 0.008;
+          gears.push(
+            {
+              x: Math.max(WALL_LEFT + 22, gapCenter - 42),
+              y: py - 22,
+              R: rad,
+              angle: 0,
+              omega: spd,
+              teeth: 10
+            },
+            {
+              x: Math.min(WALL_RIGHT - 22, gapCenter + 42),
+              y: py - 22,
+              R: rad,
+              angle: 0.3,
+              omega: -spd,
+              teeth: 10
+            }
+          );
+        } else {
+          // Sierra individual patrullando o fija
+          const gx = px + beamW * 0.5 < W * 0.5
+            ? Math.floor(lcgRange(W * 0.56, WALL_RIGHT - 26))
+            : Math.floor(lcgRange(WALL_LEFT + 26, W * 0.44));
+          const patrol = lv >= 3 ? (lcg() > 0.5 ? 0.45 : -0.45) : 0;
+          gears.push({
+            x: gx,
+            y: py - 22,
+            R: Math.floor(lcgRange(11, 14)),
+            angle: lcgRange(0, 6.28),
+            omega: (lcg() > 0.5 ? 1 : -1) * (0.045 + lv * 0.007),
+            teeth: 10,
+            vx: patrol,
+            minX: WALL_LEFT + 24,
+            maxX: WALL_RIGHT - 24
+          });
+        }
+      }
+
+      // 5. Chorros de vapor periódicos (empujan y restan energía térmica)
+      if (lv >= 2 && r === 0 && lcg() > 0.35) {
         const leftSide = lcg() > 0.5;
         vents.push({
           x: leftSide ? WALL_LEFT : WALL_RIGHT,
-          y: py - 24,
+          y: py - 20,
           dir: leftSide ? 1 : -1,
-          period: Math.floor(lcgRange(110, 160)),
+          period: Math.max(105, Math.floor(lcgRange(150, 190) - lv * 8)),
           phase: Math.floor(lcgRange(0, 120)),
-          len: Math.floor(lcgRange(48, 72))
+          len: Math.floor(lcgRange(55, 82))
         });
-      }
-
-      // Engranajes industriales (Sección 4.2 y 6)
-      if (hMeters >= 100 && hMeters < 300 && r % 2 === 1) {
-        const gx = px + beamW * 0.5 < W * 0.5
-          ? Math.floor(lcgRange(W * 0.58, WALL_RIGHT - 28))
-          : Math.floor(lcgRange(WALL_LEFT + 28, W * 0.42));
-        gears.push({
-          x: gx,
-          y: py - 22,
-          R: Math.floor(lcgRange(13, 17)),
-          angle: lcgRange(0, 6.28),
-          omega: (lcg() > 0.5 ? 1 : -1) * lcgRange(0.035, 0.055),
-          teeth: 10
-        });
-      } else if (hMeters >= 300 && r % 2 === 1) {
-        // Engranajes dobles contrarrotativos (H >= 300m)
-        const centerG = Math.floor(lcgRange(86, W - 86));
-        const rad = 14;
-        const spd = lcgRange(0.045, 0.065);
-        gears.push(
-          {
-            x: centerG - rad - 1,
-            y: py - 24,
-            R: rad,
-            angle: 0,
-            omega: spd,
-            teeth: 10
-          },
-          {
-            x: centerG + rad + 1,
-            y: py - 24,
-            R: rad,
-            angle: 0.31,
-            omega: -spd,
-            teeth: 10
-          }
-        );
       }
     }
 
-    return { idx: chunkIdx, yTop, yBottom, chunkMeters, platforms, gears, vents };
+    return { idx: chunkIdx, yTop, yBottom, platforms, gears, vents, gates };
   }
 
   function updateChunksWindow() {
-    // Determinar el chunk actual según la cámara
     const centerChunkIdx = Math.max(0, Math.floor((H - (camY + H * 0.5)) / H));
     if (activeChunks.length === 0) {
       activeChunks = [
@@ -545,16 +656,15 @@
       return;
     }
 
-    // Si el jugador sube y se aproxima al chunk superior, reciclamos el inferior
     while (centerChunkIdx + 1 > topChunkIndex) {
       topChunkIndex++;
-      activeChunks.shift(); // Descarta el chunk inferior consumido por la lava
-      activeChunks.push(generateChunk(topChunkIndex)); // Añade el nuevo chunk superior
+      activeChunks.shift();
+      activeChunks.push(generateChunk(topChunkIndex));
     }
   }
 
   // =========================================================================
-  // 7. CONTROLES (TECLADO + PANTALLA TÁCTIL)
+  // 8. CONTROLES (TECLADO + PANTALLA TÁCTIL)
   // =========================================================================
   const keys = {};
   let touchLeft = false;
@@ -567,7 +677,6 @@
       muted = !muted;
     }
     if (e.code === 'KeyR' && gameState !== 1) {
-      // Cambiar semilla en menú o game over
       setSeed(((Date.now() & 0xffff) ^ (seed * 31)) >>> 0);
     }
     if (
@@ -594,7 +703,7 @@
     for (let i = 0; i < e.touches.length; i++) {
       const tx = e.touches[i].clientX - rect.left;
       const relX = tx / rect.width;
-      if ( gameState !== 1 && relX > 0.3 && relX < 0.7 ) {
+      if (gameState !== 1 && relX > 0.3 && relX < 0.7) {
         touchCenterTap = true;
       }
       if (relX < 0.5) touchLeft = true;
@@ -611,29 +720,33 @@
   window.addEventListener('touchend', handleTouches, { passive: false });
 
   // =========================================================================
-  // 8. INICIALIZACIÓN Y BUCLE FÍSICO (SECCIONES 3 Y 4)
+  // 9. INICIALIZACIÓN Y BUCLE FÍSICO
   // =========================================================================
   function startGame() {
     setSeed(seed);
     drone.x = W / 2;
-    drone.y = 180;
+    drone.y = 184;
     drone.vx = 0;
     drone.vy = 0;
     drone.theta = 0;
     drone.pressure = 100;
+    drone.hp = 3;
+    drone.invuln = 0;
     drone.purge = 0;
     drone.cooling = false;
     drone.grounded = false;
 
-    startY = 180;
+    startY = 184;
     camY = 0;
-    lavaStartY = 268;
-    lavaY = lavaStartY;
+    lavaY = 246;
     elapsedTime = 0;
     currentMeters = 0;
     maxMeters = 0;
+    diffLevel = 1;
+    levelBannerTimer = 90;
+    deathReason = 'CONSUMIDO POR LA LAVA';
     screenShake = 0;
-    flashTimer = 0;
+    damageFlash = 0;
     bgmStep = 0;
     bgmTimer = 0;
 
@@ -654,16 +767,15 @@
         localStorage.setItem('sh_hi', String(highScore));
       } catch (_) {}
     }
-    // Explosión de chispas y vapor al destruirse el dron
     for (let i = 0; i < 28; i++) {
       const ang = (i / 28) * Math.PI * 2;
-      const spd = 1 + (i % 4) * 0.8;
+      const spd = 0.8 + (i % 4) * 0.6;
       spawnParticle(
         i % 2 === 0 ? 1 : 0,
         drone.x,
         drone.y,
         Math.cos(ang) * spd,
-        Math.sin(ang) * spd - 1,
+        Math.sin(ang) * spd - 0.6,
         24 + (i % 15),
         i % 3 === 0 ? 3 : 2
       );
@@ -671,25 +783,84 @@
     sfxTone(180, 32, 0.45, 'sawtooth', 0.18);
   }
 
+  function resolveCircleAABB(x1, y1, x2, y2, isWall, coolFactor, platformVx = 0) {
+    const xn = Math.max(x1, Math.min(drone.x, x2));
+    const yn = Math.max(y1, Math.min(drone.y, y2));
+    const dx = drone.x - xn;
+    const dy = drone.y - yn;
+    const d2 = dx * dx + dy * dy;
+
+    if (d2 < drone.r * drone.r) {
+      const d = Math.sqrt(d2) || 0.001;
+      const nx = dx / d;
+      const ny = dy / d;
+
+      const overlap = drone.r - d;
+      drone.x += nx * overlap;
+      drone.y += ny * overlap;
+
+      const vn = drone.vx * nx + drone.vy * ny;
+      if (vn < 0) {
+        const impactSpeed = -vn;
+        if (!isWall && ny < -0.65 && Math.abs(drone.vy) < 1.2 && !drone.leftOn && !drone.rightOn) {
+          drone.vy = 0;
+          drone.vx = drone.vx * 0.75 + platformVx * 0.25;
+          drone.grounded = true;
+        } else {
+          drone.vx -= (1 + RESTITUTION) * vn * nx;
+          drone.vy -= (1 + RESTITUTION) * vn * ny;
+          if (impactSpeed > 0.65) {
+            sfxBounce(impactSpeed * 0.6);
+            for (let s = 0; s < 3; s++) {
+              spawnParticle(
+                1,
+                xn,
+                yn,
+                nx * 0.8 + (Math.random() - 0.5) * 1.4,
+                ny * 0.8 - Math.random() * 1.0,
+                12 + s * 3,
+                2
+              );
+            }
+          }
+        }
+      }
+
+      // Recarga en vigas de enfriamiento
+      if (!isWall && ny < -0.65 && Math.abs(drone.vy) < 1.25) {
+        drone.grounded = true;
+        if (platformVx !== 0 && !drone.leftOn && !drone.rightOn) {
+          drone.x += platformVx;
+        }
+        if (coolFactor > 0 && drone.pressure < 100) {
+          drone.cooling = true;
+          drone.pressure = Math.min(100, drone.pressure + 2.6 * coolFactor);
+          if (drone.purge > 0) drone.purge = Math.max(0, drone.purge - 3);
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+
   function updatePhysics() {
     elapsedTime += DT;
+    if (drone.invuln > 0) drone.invuln--;
+    if (levelBannerTimer > 0) levelBannerTimer--;
 
-    // Lectura de entradas (Tobera Izquierda / Tobera Derecha)
     const wantLeft = !!(keys['ArrowLeft'] || keys['KeyA'] || touchLeft);
     const wantRight = !!(keys['ArrowRight'] || keys['KeyD'] || touchRight);
 
-    // 3.2 Dinámica de la Caldera (Termodinámica del Dron)
+    // Termodinámica de la caldera
     if (drone.purge > 0) {
       drone.purge--;
       drone.leftOn = false;
       drone.rightOn = false;
       if (drone.purge % 4 === 0) {
-        // Humo de purga de emergencia
-        spawnParticle(0, drone.x + (Math.random() * 8 - 4), drone.y - 5, (Math.random() - 0.5) * 1.2, -1.4, 18, 3);
+        spawnParticle(0, drone.x + (Math.random() * 8 - 4), drone.y - 5, (Math.random() - 0.5) * 0.8, -0.9, 16, 3);
       }
       if (drone.purge === 0) {
-        // Al concluir el bloqueo de 1.2s, restablece presión de reserva operativa
-        drone.pressure = 35;
+        drone.pressure = 38;
         sfxTone(330, 520, 0.1, 'triangle', 0.07);
       }
     } else {
@@ -698,47 +869,47 @@
 
       const activeNozzles = (drone.leftOn ? 1 : 0) + (drone.rightOn ? 1 : 0);
       if (activeNozzles > 0) {
-        // Cada frame de activación de tobera reduce la presión en 0.45%
-        drone.pressure = Math.max(0, drone.pressure - 0.45 * activeNozzles);
+        // Consumo de presión calibrado para el ritmo más pausado
+        drone.pressure = Math.max(0, drone.pressure - 0.28 * activeNozzles);
         if (drone.pressure <= 0) {
-          // Sobrecalentamiento -> Purga de Emergencia durante 1.2 segundos (72 frames)
           drone.pressure = 0;
           drone.purge = 72;
           screenShake = 6;
           sfxTone(480, 110, 0.32, 'sawtooth', 0.14);
         }
+      } else if (!drone.grounded && drone.pressure < 100) {
+        // Ligera recuperación pasiva en vuelo libre sin propulsar
+        drone.pressure = Math.min(100, drone.pressure + 0.06);
       }
     }
 
-    // 3.1 Parámetros Cinemáticos y Empuje Vectorial
+    // Fuerzas de empuje vectorial (65% más lentas y controladas)
     let ax = 0;
     let ay = 0;
 
     if (drone.leftOn) {
       ax += F_LEFT_X;
       ay += F_LEFT_Y;
-      // Partícula de vapor por tobera izquierda (expulsa abajo-izquierda)
       spawnParticle(
         0,
         drone.x - 6,
         drone.y + 3,
-        -1.3 + (Math.random() - 0.5) * 0.5,
-        1.6 + Math.random() * 0.6,
-        14 + ((Math.random() * 8) | 0),
+        -0.8 + (Math.random() - 0.5) * 0.4,
+        1.1 + Math.random() * 0.4,
+        13 + ((Math.random() * 6) | 0),
         3
       );
     }
     if (drone.rightOn) {
       ax += F_RIGHT_X;
       ay += F_RIGHT_Y;
-      // Partícula de vapor por tobera derecha (expulsa abajo-derecha)
       spawnParticle(
         0,
         drone.x + 6,
         drone.y + 3,
-        1.3 + (Math.random() - 0.5) * 0.5,
-        1.6 + Math.random() * 0.6,
-        14 + ((Math.random() * 8) | 0),
+        0.8 + (Math.random() - 0.5) * 0.4,
+        1.1 + Math.random() * 0.4,
+        13 + ((Math.random() * 6) | 0),
         3
       );
     }
@@ -746,104 +917,87 @@
     if (drone.leftOn || drone.rightOn) {
       if (steamCooldown <= 0) {
         sfxSteam(drone.leftOn && drone.rightOn);
-        steamCooldown = 4;
+        steamCooldown = 5;
       }
     }
     if (steamCooldown > 0) steamCooldown--;
 
-    // Método semiexplícito de Euler (Sección 3):
-    // v_{t+1} = (v_t + (g + a_empuje)) * mu
-    // p_{t+1} = p_t + v_{t+1}
+    // Integración de Euler con límites de velocidad máxima (65% más lento)
     drone.vx = (drone.vx + ax) * DRAG;
     drone.vy = (drone.vy + (GRAVITY_Y + ay)) * DRAG;
 
+    drone.vx = Math.max(-MAX_VX, Math.min(MAX_VX, drone.vx));
+    drone.vy = Math.max(MAX_VY_UP, Math.min(MAX_VY_DOWN, drone.vy));
+
     drone.x += drone.vx;
     drone.y += drone.vy;
-
-    // Inclinación angular visual: theta = v_x * 0.06 radianes
-    drone.theta = drone.vx * 0.06;
+    drone.theta = drone.vx * 0.12;
 
     drone.cooling = false;
     drone.grounded = false;
 
-    // 4. Detección y Respuesta a Colisiones
+    // Colisiones con el entorno
     for (let c = 0; c < activeChunks.length; c++) {
       const chunk = activeChunks[c];
 
-      // 4.1 Dron (Círculo) vs. Muros/Plataformas (AABB)
+      // 1. Plataformas fijas, móviles y tabiques de pared
       for (let i = 0; i < chunk.platforms.length; i++) {
         const p = chunk.platforms[i];
-        // 1. Punto más cercano en el rectángulo:
-        const xn = Math.max(p.x1, Math.min(drone.x, p.x2));
-        const yn = Math.max(p.y1, Math.min(drone.y, p.y2));
-
-        // 2. Distancia euclidiana al cuadrado:
-        const dx = drone.x - xn;
-        const dy = drone.y - yn;
-        const d2 = dx * dx + dy * dy;
-
-        // 3. Si d^2 < r^2, hay colisión
-        if (d2 < drone.r * drone.r) {
-          const d = Math.sqrt(d2) || 0.001;
-          const nx = dx / d;
-          const ny = dy / d;
-
-          // Corrección posicional
-          const overlap = drone.r - d;
-          drone.x += nx * overlap;
-          drone.y += ny * overlap;
-
-          // Producto punto (v . n)
-          const vn = drone.vx * nx + drone.vy * ny;
-          if (vn < 0) {
-            const impactSpeed = -vn;
-            // Si aterriza suavemente sobre una cornisa fría (|vy| < 1.5) sin propulsar, estabilizar aterrizaje
-            if (!p.wall && ny < -0.7 && Math.abs(drone.vy) < 1.5 && !drone.leftOn && !drone.rightOn) {
-              drone.vy = 0;
-              drone.vx *= 0.82;
-              drone.grounded = true;
-            } else {
-              // Refleja velocidad con coeficiente de restitución elástico e = 0.55
-              // v' = v - (1 + e)(v . n)n
-              drone.vx -= (1 + RESTITUTION) * vn * nx;
-              drone.vy -= (1 + RESTITUTION) * vn * ny;
-
-              if (impactSpeed > 0.9) {
-                sfxBounce(impactSpeed * 0.5);
-                for (let s = 0; s < 4; s++) {
-                  spawnParticle(
-                    1,
-                    xn,
-                    yn,
-                    nx * 1.2 + (Math.random() - 0.5) * 2,
-                    ny * 1.2 - Math.random() * 1.5,
-                    12 + s * 3,
-                    2
-                  );
-                }
-              }
-            }
+        if (p.vx) {
+          p.x1 += p.vx;
+          p.x2 = p.x1 + p.w;
+          if (p.x1 < p.minX || p.x2 > p.maxX) {
+            p.vx = -p.vx;
+            p.x1 = Math.max(p.minX, Math.min(p.x1, p.maxX - p.w));
+            p.x2 = p.x1 + p.w;
           }
+        }
+        resolveCircleAABB(p.x1, p.y1, p.x2, p.y2, p.wall, p.cool, p.vx || 0);
+      }
 
-          // 3.2.3 Zonas de Enfriamiento (Cornisas): |vy| < 1.5 recarga la presión a razón de 3% por frame
-          if (!p.wall && ny < -0.65 && Math.abs(drone.vy) < 1.5) {
-            drone.grounded = true;
-            if (p.cool > 0 && drone.pressure < 100) {
-              drone.cooling = true;
-              drone.pressure = Math.min(100, drone.pressure + 3.0 * p.cool);
-              if (drone.purge > 0) drone.purge = Math.max(0, drone.purge - 3);
-              if ((Math.random() * 3) | 0 === 0) {
-                spawnParticle(0, drone.x + (Math.random() * 10 - 5), drone.y + 5, 0, -0.6, 12, 2);
-              }
-            }
+      // 2. Compuertas / Cierres obligatorios de pared
+      for (let i = 0; i < chunk.gates.length; i++) {
+        const g = chunk.gates[i];
+        const cycle = (((elapsedTime * 60) | 0) + g.phase) % g.period;
+        const closedRatio = cycle / g.period;
+
+        if (closedRatio < 0.38) {
+          // Abierta (retraída)
+          g.state = 0;
+          g.curLen += (16 - g.curLen) * 0.18;
+        } else if (closedRatio < 0.52) {
+          // Advertencia antes de cerrar
+          g.state = 1;
+          g.curLen += (24 - g.curLen) * 0.15;
+        } else if (closedRatio < 0.88) {
+          // Cerrada (bloquea el paso)
+          g.state = 2;
+          g.curLen += (g.maxLen - g.curLen) * 0.25;
+        } else {
+          // Retrayéndose
+          g.state = 0;
+          g.curLen += (16 - g.curLen) * 0.18;
+        }
+
+        const gx1 = g.fromLeft ? WALL_LEFT : WALL_RIGHT - g.curLen;
+        const gx2 = g.fromLeft ? WALL_LEFT + g.curLen : WALL_RIGHT;
+
+        if (resolveCircleAABB(gx1, g.y1, gx2, g.y2, true, 0, 0)) {
+          // Si la compuerta está cerrándose activamente y golpea al jugador, resta energía
+          if (g.state === 2 && closedRatio < 0.62) {
+            applyDamage(20, 0, 'APLASTADO EN COMPUERTA');
           }
         }
       }
 
-      // 4.2 Dron (Círculo) vs. Engranaje Giratorio (Círculo con Impulso Tangencial)
+      // 3. Sierras / Engranajes giratorios (Hacen daño y restan energía al tocarlos)
       for (let i = 0; i < chunk.gears.length; i++) {
         const g = chunk.gears[i];
         g.angle += g.omega;
+        if (g.vx) {
+          g.x += g.vx;
+          if (g.x < g.minX || g.x > g.maxX) g.vx = -g.vx;
+        }
 
         const dx = drone.x - g.x;
         const dy = drone.y - g.y;
@@ -855,117 +1009,121 @@
           const ny = dy / dist;
           const phi = Math.atan2(dy, dx);
 
-          // Separar el dron del radio exterior del engranaje
-          drone.x = g.x + nx * (minDist + 0.5);
-          drone.y = g.y + ny * (minDist + 0.5);
+          drone.x = g.x + nx * (minDist + 1);
+          drone.y = g.y + ny * (minDist + 1);
 
-          // Reflexión radial elástica + transferencia de velocidad tangencial:
-          // v_tangente = omega * R * [-sin(phi), cos(phi)]
-          const vn = drone.vx * nx + drone.vy * ny;
-          if (vn < 0) {
-            drone.vx -= (1 + RESTITUTION) * vn * nx;
-            drone.vy -= (1 + RESTITUTION) * vn * ny;
-          }
-          const vTangX = g.omega * g.R * -Math.sin(phi) * 2.4;
-          const vTangY = g.omega * g.R * Math.cos(phi) * 2.4;
-          drone.vx += vTangX + nx * 0.9;
-          drone.vy += vTangY + ny * 0.9;
+          // Impulso de rechazo + componente tangencial moderada
+          const vTangX = g.omega * g.R * -Math.sin(phi) * 1.1;
+          const vTangY = g.omega * g.R * Math.cos(phi) * 1.1;
+          drone.vx = Math.max(-MAX_VX, Math.min(MAX_VX, nx * 1.3 + vTangX));
+          drone.vy = Math.max(MAX_VY_UP, Math.min(MAX_VY_DOWN, ny * 1.3 + vTangY));
 
-          screenShake = 5;
-          sfxBounce(1.5);
-          for (let s = 0; s < 6; s++) {
+          // Daño por sierra: resta 35% de energía (presión) y 1 punto de chasis (HP)
+          applyDamage(35, 1, 'DESTRUIDO POR SIERRA');
+
+          for (let s = 0; s < 8; s++) {
             spawnParticle(
               1,
               g.x + nx * g.R,
               g.y + ny * g.R,
-              (Math.random() - 0.5) * 3 + vTangX,
-              (Math.random() - 0.5) * 3 + vTangY,
-              15,
+              (Math.random() - 0.5) * 2.4 + nx,
+              (Math.random() - 0.5) * 2.4 + ny,
+              16,
               2
             );
           }
         }
       }
 
-      // Escapes de vapor periódicos (H >= 100m)
+      // 4. Chorros de vapor abrasador
       for (let i = 0; i < chunk.vents.length; i++) {
         const v = chunk.vents[i];
-        const cycle = ((elapsedTime * 60 + v.phase) | 0) % v.period;
-        const active = cycle < 38;
+        const cycle = (((elapsedTime * 60) | 0) + v.phase) % v.period;
+        const active = cycle < 42;
         if (active) {
-          if (cycle % 3 === 0) {
+          if (cycle % 4 === 0) {
             spawnParticle(
               0,
               v.x + v.dir * 4,
               v.y + (Math.random() * 6 - 3),
-              v.dir * lcgRange(2.2, 3.4),
-              (Math.random() - 0.5) * 0.4,
-              16,
+              v.dir * lcgRange(1.6, 2.4),
+              (Math.random() - 0.5) * 0.3,
+              15,
               3
             );
           }
-          // Empuje aerodinámico si el dron cruza el chorro de vapor
           const inY = Math.abs(drone.y - v.y) < 10;
           const inX = v.dir === 1
             ? drone.x > v.x && drone.x < v.x + v.len
             : drone.x < v.x && drone.x > v.x - v.len;
           if (inY && inX) {
-            drone.vx += v.dir * 0.26;
-            drone.vy -= 0.08;
+            drone.vx = Math.max(-MAX_VX, Math.min(MAX_VX, drone.vx + v.dir * 0.16));
+            drone.vy -= 0.04;
+            // El vapor hirviente drena ligeramente la presión de la caldera
+            drone.pressure = Math.max(0, drone.pressure - 0.35);
           }
         }
       }
     }
 
-    // Seguimiento vertical suave de la cámara (orientado al ascenso)
-    const targetCamY = drone.y - H * 0.62;
+    // Seguimiento de cámara
+    const targetCamY = drone.y - H * 0.6;
     if (targetCamY < camY) {
-      camY += (targetCamY - camY) * 0.14;
-    } else if (targetCamY > camY + 36) {
-      camY += (targetCamY - camY - 36) * 0.1;
+      camY += (targetCamY - camY) * 0.12;
+    } else if (targetCamY > camY + 32) {
+      camY += (targetCamY - camY - 32) * 0.08;
     }
 
     updateChunksWindow();
 
-    // Altura actual y récord en metros
+    // Actualizar altura y Nivel de Dificultad
     currentMeters = getHeightMetersAtY(drone.y);
     if (currentMeters > maxMeters) maxMeters = currentMeters;
 
-    // 3.2.4 Marea de Lava Inferior: Y_lava(t) = Y_inicial - (v_base * t + a_lava * t^1.2)
-    // Parámetros calibrados en píxeles/segundo para ascenso constante y tenso
-    const vBase = 11.5;
-    const aLava = 0.55;
-    const formulaLavaY = lavaStartY - (vBase * elapsedTime + aLava * Math.pow(elapsedTime, 1.2));
-    // Evitar que la lava quede demasiado lejos si el jugador asciende muy rápido
-    lavaY = Math.min(formulaLavaY, camY + H + 42);
+    const newDiff = getDiffAtMeters(maxMeters);
+    if (newDiff > diffLevel) {
+      diffLevel = newDiff;
+      levelBannerTimer = 110;
+      sfxTone(330, 660, 0.22, 'square', 0.09);
+    }
 
-    // Burbujas incandescentes en la superficie de la lava
+    // Velocidad de la lava coherente con el nuevo ritmo del jugador y creciente con la dificultad:
+    // En NV.1 sube a ~0.36 px/frame (21.6 px/s); cada nivel añade +0.085 px/frame
+    const lavaStep = 0.36 + (diffLevel - 1) * 0.085 + Math.min(0.18, elapsedTime * 0.002);
+    lavaY -= lavaStep;
+
+    // Mantener la lava siempre a una distancia máxima de tensión (~155 px debajo del dron)
+    const maxLavaLag = Math.max(115, 162 - (diffLevel - 1) * 8);
+    if (lavaY > drone.y + maxLavaLag) {
+      lavaY -= (lavaY - (drone.y + maxLavaLag)) * 0.06;
+    }
+
+    // Brasas en la superficie de la lava
     if (((elapsedTime * 60) | 0) % 5 === 0) {
       spawnParticle(
         2,
         WALL_LEFT + 6 + Math.random() * (WALL_RIGHT - WALL_LEFT - 12),
         lavaY,
-        (Math.random() - 0.5) * 0.4,
-        -0.8 - Math.random() * 0.8,
-        22,
+        (Math.random() - 0.5) * 0.3,
+        -0.6 - Math.random() * 0.5,
+        20,
         2
       );
     }
 
-    // Destrucción térmica inmediata si Y_dron >= Y_lava
     if (drone.y + drone.r >= lavaY) {
+      deathReason = 'CONSUMIDO POR LA LAVA';
       triggerGameOver();
     }
   }
 
   // =========================================================================
-  // 9. MOTOR GRÁFICO PROCEDURAL (CANVAS 2D - SECCIÓN 5.1)
+  // 10. RENDERIZADO PROCEDURAL (CANVAS 2D)
   // =========================================================================
   function drawBackground(camY) {
-    ctx.fillStyle = PAL[0];
+    ctx.fillStyle = damageFlash > 0 ? PAL[8] : PAL[0];
     ctx.fillRect(0, 0, W, H);
 
-    // Patrón de mampostería y tuberías del pozo en parallax
     const parallaxY = (camY * 0.4) | 0;
     const brickH = 16;
     const startRow = Math.floor(parallaxY / brickH);
@@ -980,7 +1138,6 @@
         ctx.fillRect(bx, sy, 1, brickH);
       }
 
-      // Vigas transversales de fondo cada 5 hileras
       if (r % 5 === 0) {
         ctx.fillStyle = PAL[2];
         ctx.fillRect(WALL_LEFT, sy + 2, WALL_RIGHT - WALL_LEFT, 4);
@@ -992,8 +1149,6 @@
     const sy = g.y - camY;
     if (sy < -g.R - 8 || sy > H + g.R + 8) return;
 
-    // 5.1 Engranajes Industriales: funciones trigonométricas paramétricas
-    // r(i) = R si i mod 2 == 0, R - h_diente si i mod 2 == 1
     const steps = g.teeth * 2;
     const hTooth = 4;
 
@@ -1001,30 +1156,31 @@
     ctx.translate(g.x, sy);
     ctx.rotate(g.angle);
 
+    // Dientes de sierra afilados con borde peligroso
     ctx.beginPath();
     for (let i = 0; i < steps; i++) {
       const a1 = (i / steps) * Math.PI * 2;
-      const a2 = ((i + 0.85) / steps) * Math.PI * 2;
-      const rad = i % 2 === 0 ? g.R : g.R - hTooth;
+      const a2 = ((i + 0.65) / steps) * Math.PI * 2;
+      const rad = i % 2 === 0 ? g.R + 1 : g.R - hTooth;
       ctx.lineTo(Math.cos(a1) * rad, Math.sin(a1) * rad);
       ctx.lineTo(Math.cos(a2) * rad, Math.sin(a2) * rad);
     }
     ctx.closePath();
-    ctx.fillStyle = PAL[4];
+    ctx.fillStyle = PAL[14];
     ctx.fill();
     ctx.lineWidth = 1;
-    ctx.strokeStyle = PAL[6];
+    ctx.strokeStyle = PAL[9];
     ctx.stroke();
 
-    // Anillo interior y eje central
+    // Núcleo rojo de advertencia de daño
     ctx.beginPath();
-    ctx.arc(0, 0, g.R - 6, 0, Math.PI * 2);
-    ctx.fillStyle = PAL[2];
+    ctx.arc(0, 0, g.R - 5, 0, Math.PI * 2);
+    ctx.fillStyle = PAL[8];
     ctx.fill();
 
     ctx.beginPath();
-    ctx.arc(0, 0, 3, 0, Math.PI * 2);
-    ctx.fillStyle = PAL[14];
+    ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = PAL[7];
     ctx.fill();
 
     ctx.restore();
@@ -1034,17 +1190,16 @@
     for (let c = 0; c < activeChunks.length; c++) {
       const chunk = activeChunks[c];
 
-      // Dibujar plataformas y muros laterales
+      // 1. Plataformas y Tabiques de bloqueo
       for (let i = 0; i < chunk.platforms.length; i++) {
         const p = chunk.platforms[i];
         const sy1 = (p.y1 - camY) | 0;
         const sy2 = (p.y2 - camY) | 0;
         if (sy2 < 0 || sy1 > H) continue;
-        const pw = p.x2 - p.x1;
+        const pw = (p.x2 - p.x1) | 0;
         const ph = Math.max(1, sy2 - sy1);
 
-        if (p.wall) {
-          // Muros de contención laterales con remaches
+        if (p.wall && !p.barrier) {
           ctx.fillStyle = PAL[2];
           ctx.fillRect(p.x1, sy1, pw, ph);
           ctx.fillStyle = PAL[4];
@@ -1054,31 +1209,69 @@
             ctx.fillStyle = PAL[5];
             ctx.fillRect(p.x1 === 0 ? pw - 5 : p.x1 + 3, ry + 4, 2, 2);
           }
-        } else {
-          // Viga / Cornisa de enfriamiento
-          ctx.fillStyle = p.cool > 0 ? PAL[11] : PAL[3];
+        } else if (p.barrier) {
+          // Tabique fijo de bloqueo de pared (franjas de peligro)
+          ctx.fillStyle = PAL[3];
           ctx.fillRect(p.x1, sy1, pw, ph);
+          ctx.fillStyle = PAL[6];
+          ctx.fillRect(p.x1, sy1, pw, 2);
+          ctx.fillRect(p.x1, sy2 - 2, pw, 2);
+          ctx.fillStyle = PAL[7];
+          for (let sx = p.x1 + 4; sx < p.x2 - 6; sx += 10) {
+            ctx.fillRect(sx, sy1 + 3, 4, ph - 6);
+          }
+        } else {
+          // Viga de aterrizaje / enfriamiento
+          ctx.fillStyle = p.cool > 0 ? PAL[11] : PAL[3];
+          ctx.fillRect(p.x1 | 0, sy1, pw, ph);
 
-          // Superficie superior refrigerante (azul cian / escarcha)
-          ctx.fillStyle = p.cool >= 1 ? PAL[12] : PAL[4];
-          ctx.fillRect(p.x1, sy1, pw, 3);
+          ctx.fillStyle = p.cool >= 1 ? PAL[12] : PAL[5];
+          ctx.fillRect(p.x1 | 0, sy1, pw, 3);
 
-          // Brillo escarcha en cornisas de enfriamiento
           if (p.cool > 0) {
             ctx.fillStyle = PAL[13];
-            for (let rx = p.x1 + 3; rx < p.x2 - 4; rx += 8) {
+            for (let rx = (p.x1 | 0) + 3; rx < p.x2 - 4; rx += 8) {
               ctx.fillRect(rx, sy1, 4, 1);
             }
           }
 
-          // Remaches industriales
-          ctx.fillStyle = PAL[0];
-          ctx.fillRect(p.x1 + 2, sy1 + 5, 2, 2);
-          ctx.fillRect(p.x2 - 4, sy1 + 5, 2, 2);
+          // Indicador de riel si es plataforma móvil
+          if (p.vx) {
+            ctx.fillStyle = PAL[7];
+            ctx.fillRect(((p.x1 + p.x2) >> 1) - 2, sy1 + 4, 4, 3);
+          }
         }
       }
 
-      // Dibujar escapes de vapor periódicos
+      // 2. Compuertas / Cierres obligatorios de pared
+      for (let i = 0; i < chunk.gates.length; i++) {
+        const g = chunk.gates[i];
+        const sy1 = (g.y1 - camY) | 0;
+        const sy2 = (g.y2 - camY) | 0;
+        if (sy2 < 0 || sy1 > H) continue;
+        const ph = sy2 - sy1;
+        const gx1 = (g.fromLeft ? WALL_LEFT : WALL_RIGHT - g.curLen) | 0;
+        const gw = g.curLen | 0;
+
+        // Riel guía de fondo
+        ctx.fillStyle = PAL[1];
+        const railX = g.fromLeft ? WALL_LEFT : WALL_RIGHT - g.maxLen;
+        ctx.fillRect(railX, sy1 + 3, g.maxLen, 4);
+
+        // Cuerpo del pistón / compuerta
+        ctx.fillStyle = g.state === 2 ? PAL[8] : PAL[3];
+        ctx.fillRect(gx1, sy1, gw, ph);
+        ctx.fillStyle = g.state === 2 ? PAL[9] : g.state === 1 ? PAL[7] : PAL[5];
+        ctx.fillRect(gx1, sy1, gw, 2);
+        ctx.fillRect(gx1, sy2 - 2, gw, 2);
+
+        // Cabeza de cierre con semáforo de estado
+        const headX = g.fromLeft ? gx1 + gw - 6 : gx1;
+        ctx.fillStyle = g.state === 2 ? PAL[10] : g.state === 1 ? PAL[7] : PAL[12];
+        ctx.fillRect(headX, sy1 + 2, 6, ph - 4);
+      }
+
+      // 3. Escapes de vapor
       for (let i = 0; i < chunk.vents.length; i++) {
         const v = chunk.vents[i];
         const sy = (v.y - camY) | 0;
@@ -1086,15 +1279,14 @@
         ctx.fillStyle = PAL[5];
         const vx = v.dir === 1 ? v.x - 2 : v.x - 4;
         ctx.fillRect(vx, sy - 4, 6, 8);
-        const cycle = ((elapsedTime * 60 + v.phase) | 0) % v.period;
-        if (cycle > v.period - 30 || cycle < 38) {
-          // Luz de advertencia antes y durante la expulsión
-          ctx.fillStyle = cycle < 38 ? PAL[10] : PAL[7];
+        const cycle = (((elapsedTime * 60) | 0) + v.phase) % v.period;
+        if (cycle > v.period - 30 || cycle < 42) {
+          ctx.fillStyle = cycle < 42 ? PAL[10] : PAL[7];
           ctx.fillRect(v.dir === 1 ? v.x : v.x - 2, sy - 1, 2, 2);
         }
       }
 
-      // Dibujar engranajes
+      // 4. Sierras
       for (let i = 0; i < chunk.gears.length; i++) {
         drawGear(chunk.gears[i], camY);
       }
@@ -1102,6 +1294,9 @@
   }
 
   function drawDrone(camY) {
+    // Parpadeo cuando tiene invulnerabilidad por daño
+    if (drone.invuln > 0 && ((drone.invuln >> 1) & 1)) return;
+
     const sx = drone.x;
     const sy = drone.y - camY;
 
@@ -1109,13 +1304,12 @@
     ctx.translate(sx, sy);
     ctx.rotate(drone.theta);
 
-    // Toberas laterales conctx.fillRect() (Sección 5.1)
+    // Toberas laterales
     ctx.fillStyle = drone.leftOn ? PAL[10] : PAL[4];
     ctx.fillRect(-drone.r - 3, -1, 4, 6);
     ctx.fillStyle = drone.rightOn ? PAL[10] : PAL[4];
     ctx.fillRect(drone.r - 1, -1, 4, 6);
 
-    // Llamarada / chorro corto en la boca de la tobera activa
     if (drone.leftOn) {
       ctx.fillStyle = PAL[15];
       ctx.fillRect(-drone.r - 3, 5, 3, 3);
@@ -1125,7 +1319,7 @@
       ctx.fillRect(drone.r, 5, 3, 3);
     }
 
-    // Cúpula de latón mediante ctx.arc() (Sección 5.1)
+    // Cúpula del dron
     ctx.beginPath();
     ctx.arc(0, 0, drone.r, 0, Math.PI * 2);
     ctx.fillStyle = drone.purge > 0
@@ -1135,24 +1329,22 @@
       : PAL[5];
     ctx.fill();
 
-    // Reflejo superior de la cúpula de latón
     ctx.beginPath();
     ctx.arc(-2, -2, drone.r * 0.55, 0, Math.PI * 2);
     ctx.fillStyle = drone.cooling ? PAL[13] : PAL[6];
     ctx.fill();
 
-    // Remache superior (válvula de caldera)
     ctx.fillStyle = PAL[4];
     ctx.fillRect(-2, -drone.r - 2, 4, 2);
 
-    // Ojo central cuya pupila se desplaza proporcionalmente a (vx, vy)
+    // Ojo central
     ctx.beginPath();
     ctx.arc(0, 0, 3.6, 0, Math.PI * 2);
     ctx.fillStyle = PAL[0];
     ctx.fill();
 
-    const px = Math.max(-1.8, Math.min(1.8, drone.vx * 0.45));
-    const py = Math.max(-1.8, Math.min(1.8, drone.vy * 0.45));
+    const px = Math.max(-1.8, Math.min(1.8, drone.vx * 0.8));
+    const py = Math.max(-1.8, Math.min(1.8, drone.vy * 0.8));
     ctx.fillStyle = drone.purge > 0 ? PAL[10] : drone.cooling ? PAL[13] : PAL[7];
     ctx.fillRect((px - 1) | 0, (py - 1) | 0, 2, 2);
 
@@ -1162,9 +1354,8 @@
   function drawLava(camY) {
     const sy = (lavaY - camY) | 0;
     if (sy > H) {
-      // Indicador térmico inferior de cercanía de la marea de lava
-      const dist = Math.max(0, Math.floor((lavaY - drone.y) / 6));
-      if (dist < 25) {
+      const dist = Math.max(0, Math.floor((lavaY - drone.y) / 12));
+      if (dist < 14) {
         ctx.fillStyle = (elapsedTime * 10) & 1 ? PAL[9] : PAL[10];
         ctx.fillRect(WALL_LEFT, H - 3, WALL_RIGHT - WALL_LEFT, 3);
       }
@@ -1172,14 +1363,12 @@
     }
 
     const topY = Math.max(0, sy);
-    // Cuerpo de metal fundido
     ctx.fillStyle = PAL[8];
     ctx.fillRect(0, topY, W, H - topY);
 
     ctx.fillStyle = PAL[9];
     ctx.fillRect(0, topY, W, Math.min(10, H - topY));
 
-    // Olas incandescentes superficiales
     ctx.fillStyle = PAL[10];
     for (let x = 0; x < W; x += 8) {
       const wave = Math.sin(elapsedTime * 6 + x * 0.2) * 2;
@@ -1193,18 +1382,17 @@
   }
 
   function drawHUD() {
-    // Panel superior estilo NES
     ctx.fillStyle = PAL[0];
-    ctx.fillRect(0, 0, W, 22);
+    ctx.fillRect(0, 0, W, 24);
     ctx.fillStyle = PAL[4];
-    ctx.fillRect(0, 21, W, 1);
+    ctx.fillRect(0, 23, W, 1);
 
-    // Barra de Presión de Vapor (P)
-    drawText('PRESION', 8, 4, PAL[15], 1);
+    // Energía / Presión de Vapor
+    drawText('VAPOR', 6, 4, PAL[15], 1);
     ctx.fillStyle = PAL[2];
-    ctx.fillRect(8, 11, 76, 7);
+    ctx.fillRect(6, 12, 64, 7);
 
-    const pWidth = Math.floor((drone.pressure / 100) * 74);
+    const pWidth = Math.floor((drone.pressure / 100) * 62);
     let barColor = PAL[12];
     if (drone.purge > 0) {
       barColor = (drone.purge >> 2) & 1 ? PAL[9] : PAL[10];
@@ -1216,82 +1404,98 @@
       barColor = PAL[7];
     }
     ctx.fillStyle = barColor;
-    ctx.fillRect(9, 12, pWidth, 5);
+    ctx.fillRect(7, 13, pWidth, 5);
 
     if (drone.purge > 0) {
-      drawText('PURGA!', 88, 12, PAL[10], 1);
+      drawText('PURGA', 74, 13, PAL[10], 1);
     } else if (drone.cooling) {
-      drawText('+FRIO', 88, 12, PAL[13], 1);
+      drawText('+FRIO', 74, 13, PAL[13], 1);
     } else {
-      drawText((drone.pressure | 0) + '%', 88, 12, PAL[14], 1);
+      drawText((drone.pressure | 0) + '%', 74, 13, PAL[14], 1);
     }
 
-    // Altitud actual y Récord
-    drawText('ALT:' + maxMeters + 'M', 168, 4, PAL[7], 1);
-    drawText('TOP:' + Math.max(highScore, maxMeters) + 'M', 168, 12, PAL[14], 1);
+    // Blindaje / Chasis (3 bloques) y Nivel de Dificultad
+    drawText('CASCO:', 42, 4, PAL[14], 1);
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = i < drone.hp ? PAL[7] : PAL[2];
+      ctx.fillRect(80 + i * 8, 4, 6, 5);
+    }
 
-    // Alerta de marea de lava cercana
-    const lavaDistM = Math.max(0, Math.floor((lavaY - drone.y) / 6));
-    if (lavaDistM < 18 && ((elapsedTime * 8) | 0) % 2 === 0) {
-      drawText('!LAVA A ' + lavaDistM + 'M!', W >> 1, 26, PAL[10], 1, 1);
+    drawText('NV:' + diffLevel, 114, 4, PAL[10], 1);
+
+    // Altitud y Récord
+    drawText('ALT:' + maxMeters + 'M', 250, 4, PAL[7], 1, 2);
+    drawText('TOP:' + Math.max(highScore, maxMeters) + 'M', 250, 13, PAL[14], 1, 2);
+
+    // Banner al subir de nivel de dificultad
+    if (levelBannerTimer > 0 && ((levelBannerTimer >> 2) & 1)) {
+      drawText('!DIFICULTAD NV.' + diffLevel + '!', W >> 1, 30, PAL[7], 1, 1);
+    } else {
+      const lavaDistM = Math.max(0, Math.floor((lavaY - drone.y) / 12));
+      if (lavaDistM < 10 && ((elapsedTime * 8) | 0) % 2 === 0) {
+        drawText('!LAVA A ' + lavaDistM + 'M!', W >> 1, 30, PAL[10], 1, 1);
+      }
     }
   }
 
   function drawMenu() {
-    drawBackground(elapsedTime * -18);
+    drawBackground(elapsedTime * -10);
 
-    // Marco industrial estilo cartucho NES
     ctx.fillStyle = PAL[0];
-    ctx.fillRect(22, 24, W - 44, H - 48);
+    ctx.fillRect(14, 18, W - 28, H - 36);
     ctx.strokeStyle = PAL[5];
     ctx.lineWidth = 2;
-    ctx.strokeRect(23, 25, W - 46, H - 50);
+    ctx.strokeRect(15, 19, W - 30, H - 38);
 
-    drawText('STEAM HOPPER', W >> 1, 38, PAL[6], 3, 1);
-    drawText('VAPOR ASCENT - NES EDITION', W >> 1, 58, PAL[12], 1, 1);
+    drawText('STEAM HOPPER', W >> 1, 30, PAL[6], 2, 1);
+    drawText('VAPOR ASCENT - NES', W >> 1, 46, PAL[12], 1, 1);
 
-    // Dron de demostración animado en el menú
+    // Dron de demostración
     drone.x = W >> 1;
-    drone.y = 92 + Math.sin(elapsedTime * 4) * 5;
-    drone.vx = Math.cos(elapsedTime * 2) * 2;
-    drone.vy = Math.sin(elapsedTime * 4) * 0.8;
-    drone.theta = drone.vx * 0.06;
-    drone.leftOn = Math.sin(elapsedTime * 4) < 0;
-    drone.rightOn = Math.sin(elapsedTime * 4) < 0.2;
+    drone.y = 76 + Math.sin(elapsedTime * 3) * 4;
+    drone.vx = Math.cos(elapsedTime * 1.8) * 1.2;
+    drone.vy = Math.sin(elapsedTime * 3) * 0.5;
+    drone.theta = drone.vx * 0.12;
+    drone.leftOn = Math.sin(elapsedTime * 3) < 0;
+    drone.rightOn = Math.sin(elapsedTime * 3) < 0.2;
+    drone.invuln = 0;
     drawDrone(0);
 
-    drawText('[A / IZQ] TOBERA IZQUIERDA', W >> 1, 118, PAL[15], 1, 1);
-    drawText('[D / DER] TOBERA DERECHA', W >> 1, 128, PAL[15], 1, 1);
-    drawText('[AMBAS] ASCENSO VERTICAL', W >> 1, 138, PAL[7], 1, 1);
-    drawText('POSATE EN VIGAS AZULES PARA ENFRIAR', W >> 1, 152, PAL[13], 1, 1);
+    drawText('A / IZQ : TOBERA IZQ', W >> 1, 98, PAL[15], 1, 1);
+    drawText('D / DER : TOBERA DER', W >> 1, 110, PAL[15], 1, 1);
+    drawText('AMBAS   : SUBIR RECTO', W >> 1, 122, PAL[7], 1, 1);
+    drawText('VIGAS AZULES ENFRIAN', W >> 1, 138, PAL[13], 1, 1);
+    drawText('EVITA SIERRAS Y CIERRES', W >> 1, 150, PAL[9], 1, 1);
 
-    drawText('SEMILLA:' + seed + ' [R CAMBIAR]', W >> 1, 168, PAL[14], 1, 1);
+    drawText('SEMILLA:' + seed + ' [R]', W >> 1, 168, PAL[14], 1, 1);
     drawText('RECORD:' + highScore + 'M', W >> 1, 180, PAL[6], 1, 1);
 
     if (((elapsedTime * 3) | 0) % 2 === 0) {
-      drawText('PULSA ESPACIO O TOCA PARA INICIAR', W >> 1, 198, PAL[10], 1, 1);
+      drawText('PULSA ESPACIO O TOCA', W >> 1, 200, PAL[10], 1, 1);
     }
   }
 
   function drawGameOver() {
-    ctx.fillStyle = 'rgba(13, 10, 11, 0.78)';
-    ctx.fillRect(28, 52, W - 56, 136);
+    ctx.fillStyle = 'rgba(13, 10, 11, 0.86)';
+    ctx.fillRect(18, 44, W - 36, 152);
     ctx.strokeStyle = PAL[9];
     ctx.lineWidth = 2;
-    ctx.strokeRect(29, 53, W - 58, 134);
+    ctx.strokeRect(19, 45, W - 38, 150);
 
-    drawText('DESTRUCCION TERMICA', W >> 1, 68, PAL[10], 2, 1);
-    drawText('ALTURA ALCANZADA: ' + maxMeters + 'M', W >> 1, 96, PAL[15], 1, 1);
-    drawText('RECORD MAXIMO: ' + highScore + 'M', W >> 1, 110, PAL[7], 1, 1);
-    drawText('SEMILLA: ' + seed + ' [R NUEVA]', W >> 1, 126, PAL[12], 1, 1);
+    drawText('FIN DE PARTIDA', W >> 1, 58, PAL[10], 2, 1);
+    drawText(deathReason, W >> 1, 80, PAL[9], 1, 1);
+
+    drawText('ALTURA : ' + maxMeters + 'M (NV.' + diffLevel + ')', W >> 1, 100, PAL[15], 1, 1);
+    drawText('RECORD : ' + highScore + 'M', W >> 1, 114, PAL[7], 1, 1);
+    drawText('SEMILLA: ' + seed + ' [R NUEVA]', W >> 1, 132, PAL[12], 1, 1);
 
     if (((elapsedTime * 3) | 0) % 2 === 0) {
-      drawText('ESPACIO / ENTER PARA REINTENTAR', W >> 1, 156, PAL[15], 1, 1);
+      drawText('ESPACIO PARA REINTENTAR', W >> 1, 164, PAL[15], 1, 1);
     }
   }
 
   // =========================================================================
-  // 10. BUCLE PRINCIPAL DE TIEMPO FIJO (dt = 1/60s)
+  // 11. BUCLE PRINCIPAL DE TIEMPO FIJO (dt = 1/60s)
   // =========================================================================
   let lastTime = performance.now();
   let accumulator = 0;
@@ -1310,11 +1514,10 @@
       }
       updateParticles();
       if (screenShake > 0) screenShake--;
-      if (flashTimer > 0) flashTimer--;
+      if (damageFlash > 0) damageFlash--;
       accumulator -= DT;
     }
 
-    // Renderizado
     ctx.save();
     if (screenShake > 0) {
       const sx = ((Math.random() - 0.5) * screenShake) | 0;
