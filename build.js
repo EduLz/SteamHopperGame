@@ -17,11 +17,29 @@ function minifyJS(code) {
     .replace(/\s+\/\/.*$/gm, '');
 
   // 2. Proteger literales de cadena
-  const tokenized = noComments.replace(/'[^']*'/g, (match) => {
+  let tokenized = noComments.replace(/'[^']*'/g, (match) => {
     const id = `__STR_${strings.length}__`;
     strings.push(match);
     return id;
   });
+
+  // 2b. Aplanar los objetos singleton internos (drone y boss) en variables directas para ahorrar ~1.2 KB
+  for (const objName of ['drone', 'boss']) {
+    tokenized = tokenized.replace(new RegExp(`const ${objName}\\s*=\\s*\\{([\\s\\S]*?)\\};`), (_, body) => {
+      const pairs = body
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((pair) => {
+          const idx = pair.indexOf(':');
+          const k = pair.slice(0, idx).trim();
+          const v = pair.slice(idx + 1).trim();
+          return `${objName}_${k}=${v}`;
+        });
+      return `let ${pairs.join(',')};`;
+    });
+    tokenized = tokenized.replace(new RegExp(`\\b${objName}\\.([A-Za-z0-9_$]+)`, 'g'), `${objName}_$1`);
+  }
 
   // 3. Mangle seguro de identificadores y propiedades internas del ámbito IIFE
   const idMap = {
@@ -395,8 +413,60 @@ function minifyJS(code) {
     reason: '_rsn',
     dmg: '_dm2',
     hi: '_hi2',
-    hp: '_hp'
+    hp: '_hp',
+    ZONE_KEYS: '_ZK',
+    WAVE_TYPES: '_WT',
+    isBoss: '_iB',
+    keyShift: '_kS',
+    patIdx: '_pIx',
+    leadWave: '_lW',
+    arpStep: '_aS',
+    isZoneUnlocked: '_iZU',
+    startZone: '_sZn',
+    ngPlus: '_ngP',
+    parry: '_pry',
+    parried: '_prd',
+    initMeters: '_iMt',
+    slide: '_sld',
+    hadShield: '_hSh',
+    isParry: '_iPr',
+    distToBoss: '_dTB',
+    drawModal: '_dMd',
+    title: '_ttl',
+    titleCol: '_tCl',
+    borderCol: '_bCl',
+    subText: '_sTx',
+    btnText: '_bTx',
+    drawOverlayModal: '_dOM',
+    isPause: '_iPs',
+    activeBuffs: '_aBf',
+    pass: '_ps2',
+    off: '_of2',
+    getBossAlt: '_gBA',
+    row: '_rw',
+    C_BLK: '_c0',
+    C_DRK: '_c1',
+    C_RST: '_c2',
+    C_CPR: '_c3',
+    C_BRS: '_c4',
+    C_GLD: '_c5',
+    C_YLW: '_c6',
+    C_RDD: '_c7',
+    C_RED: '_c8',
+    C_ORG: '_c9',
+    C_CYN: '_cA',
+    C_ICE: '_cB',
+    C_GRY: '_cC',
+    C_WHT: '_cD',
+    C_GRN: '_cE',
+    C_PRP: '_cF'
   };
+
+  // Incluir automáticamente todas las variables aplanadas drone_* y boss_*
+  const flatMatches = tokenized.match(/\b(drone|boss)_[A-Za-z0-9_$]+\b/g) || [];
+  for (const fm of flatMatches) {
+    idMap[fm] = fm;
+  }
 
   // Asignar automáticamente los nombres más cortos posibles (1 y 2 caracteres) según frecuencia de aparición
   const keysList = Object.keys(idMap);
@@ -408,7 +478,7 @@ function minifyJS(code) {
   keysList.sort((a, b) => freqMap[b] - freqMap[a]);
 
   // Generar pool seguro de identificadores cortos (1 char libre y 2 chars)
-  const usedSingle = new Set(['W', 'H', 'M', 'G', 'R', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'w', 'x', 'y']);
+  const usedSingle = new Set(['W', 'H', 'M', 'G', 'R', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'm', 'n', 'p', 'q', 'r', 's', 't', 'v', 'w', 'x', 'y', 'z']);
   const shortPool = [];
   const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz$_';
   const alnum = alpha + '0123456789';
@@ -418,7 +488,7 @@ function minifyJS(code) {
   for (const c1 of '_$ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz') {
     for (const c2 of alnum) {
       const cand = c1 + c2;
-      if (!['if', 'in', 'do', 'fl', 'rn', 'mx', 'mn', 'sn', 'cs', 'PI', 'fR', 'AC', 'sr', 'dt', 'tx', 'ty', 'vx', 'vy', 'ax', 'ay', 'dx', 'dy', 'nx', 'ny', 'vn', 'd2', 'x1', 'y1', 'x2', 'y2', 'gx', 'gy', 'sy', 'sx', 'pw', 'ph', 'gw', 'bx', 'by', 'bw', 'px', 'py', 'sz', 'lv', 'sk', 'ps', 'ch', 'a1', 'a2', 'f0', 'f1', 'v0'].includes(cand)) {
+      if (!['if', 'in', 'do', 'fl', 'rn', 'mx', 'mn', 'sn', 'cs', 'hy', 'ab', 'PI', 'fR', 'AC', 'sr', 'dt', 'tx', 'ty', 'vx', 'vy', 'ax', 'ay', 'dx', 'dy', 'nx', 'ny', 'vn', 'd2', 'x1', 'y1', 'x2', 'y2', 'gx', 'gy', 'sy', 'sx', 'pw', 'ph', 'gw', 'bx', 'by', 'bw', 'px', 'py', 'sz', 'lv', 'sk', 'ps', 'ch', 'a1', 'a2', 'f0', 'f1', 'v0', 'cx', 'rx', 'lx'].includes(cand)) {
         shortPool.push(cand);
       }
     }
@@ -445,14 +515,16 @@ function minifyJS(code) {
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
-    .join('\n')
-    .replace(/[ \t]*([=+\-*/%&|^<>!?:;,{}()[\]])[ \t]*/g, '$1')
-    .replace(/([;{},:])\n/g, '$1');
+    .join('')
+    .replace(/[ \t]*([=+\-*/%&|^<>!?:;,{}()[\]])[ \t]*/g, '$1');
 
-  while (/\blet ([^;{}\n]+);let /.test(compacted)) {
-    compacted = compacted.replace(/\blet ([^;{}\n]+);let /g, 'let $1,');
+  while (/\blet ([^;{}]+);let /.test(compacted)) {
+    compacted = compacted.replace(/\blet ([^;{}]+);let /g, 'let $1,');
   }
-  compacted = compacted.replace(/;\}/g, '}');
+  compacted = compacted
+    .replace(/\belse\{([^{};]+);?\}/g, 'else $1;')
+    .replace(/\b(for|while)\(([^()]+)\)\{([^{};]+);?\}/g, '$1($2)$3;')
+    .replace(/;\}/g, '}');
 
   // 5. Restaurar cadenas originales intactas
   return compacted.replace(/__STR_(\d+)__/g, (_, idx) => strings[Number(idx)]);
