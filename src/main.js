@@ -38,12 +38,16 @@
   ctx.imageSmoothingEnabled = false;
 
   const BG9 = 'rgba(6,9,15,0.94)';
+  // Paleta base estilo v6 + tonos oscuros compartidos (16..20)
+  const PAL = '#06090f|#161920|#3b251e|#7a4832|#c87d3b|#fbbf24|#fde047|#8c1d18|#ef4444|#ff7722|#38bdf8|#bae6fd|#94a3b8|#f8fafc|#4ade80|#c084fc|#064e3b|#1e3a8a|#0e7490|#166534|#4c1d95'.split('|');
+  // 0:BG 1:DARK 2:PIPE 3:RUST 4:COPPER 5:GOLD 6:YG 7:CRIMSON 8:RED 9:ORANGE 10:CYAN 11:ICE 12:STEEL 13:WHITE 14:GREEN 15:PURPLE 16:TEALDK 17:NAVY 18:CYAN2 19:GRNDK 20:PURPDK
+  const P = (c) => PAL[c] || c;
   const fR = (x, y, w, h, c) => {
-    ctx.fillStyle = c;
+    ctx.fillStyle = P(c);
     ctx.fillRect(x | 0, y | 0, w | 0, h | 0);
   };
   const sR = (x, y, w, h, c, lw) => {
-    ctx.strokeStyle = c;
+    ctx.strokeStyle = P(c);
     ctx.lineWidth = lw || 1;
     ctx.strokeRect(x | 0, y | 0, w | 0, h | 0);
   };
@@ -51,11 +55,11 @@
     ctx.beginPath();
     ctx.arc(x, y, r, 0, PI2);
     if (w) {
-      ctx.strokeStyle = c;
+      ctx.strokeStyle = P(c);
       ctx.lineWidth = w;
       ctx.stroke();
     } else {
-      ctx.fillStyle = c;
+      ctx.fillStyle = P(c);
       ctx.fill();
     }
   };
@@ -67,10 +71,6 @@
     ctx.restore();
   };
   const hsl = (h, s, l) => 'hsl(' + h + ',' + s + '%,' + l + '%)';
-
-  // Paleta base estilo v6 + tonos oscuros compartidos (16..20)
-  const PAL = '#06090f|#161920|#3b251e|#7a4832|#c87d3b|#fbbf24|#fde047|#8c1d18|#ef4444|#ff7722|#38bdf8|#bae6fd|#94a3b8|#f8fafc|#4ade80|#c084fc|#064e3b|#1e3a8a|#0e7490|#166534|#4c1d95'.split('|');
-  // 0:BG 1:DARK 2:PIPE 3:RUST 4:COPPER 5:GOLD 6:YG 7:CRIMSON 8:RED 9:ORANGE 10:CYAN 11:ICE 12:STEEL 13:WHITE 14:GREEN 15:PURPLE 16:TEALDK 17:NAVY 18:CYAN2 19:GRNDK 20:PURPDK
 
   // =========================================================================
   // 2. FUENTE BITMAP 5x7 BASE-32 NITIDA Y CONTENEDORES V6
@@ -96,7 +96,7 @@
         for (let r = 0; r < 7; r++) {
           const row = parseInt(FG[off + r], 32);
           if (!row) continue;
-          if (pass) ctx.fillStyle = topCol && r < 3 ? topCol : col;
+          if (pass) ctx.fillStyle = P(topCol != null && r < 3 ? topCol : col);
           for (let c = 0; c < 5; c++) {
             if (row & (16 >> c)) ctx.fillRect(bx + c * s, py + r * s + o, s, s);
           }
@@ -106,14 +106,14 @@
   }
 
   function drawPanel(x, y, w, h, bg, border) {
-    const bc = border || PAL[4];
-    fR(x, y, w, h, bg || PAL[0]);
+    const bc = border == null ? 4 : border;
+    fR(x, y, w, h, bg == null ? 0 : bg);
     sR((x | 0) + 1, (y | 0) + 1, (w | 0) - 2, (h | 0) - 2, bc, 2);
     for (let k = 0; k < 4; k++) fR(k & 1 ? x + w - 5 : x + 3, k & 2 ? y + h - 5 : y + 3, 2, 2, bc);
   }
 
   function drawToothed(steps, rOut, rIn, fillCol, strokeCol) {
-    ctx.fillStyle = fillCol;
+    ctx.fillStyle = P(fillCol);
     ctx.beginPath();
     for (let i = 0; i < steps; i++) {
       const a = (i / steps) * PI2;
@@ -123,8 +123,8 @@
     }
     ctx.closePath();
     ctx.fill();
-    if (strokeCol) {
-      ctx.strokeStyle = strokeCol;
+    if (strokeCol != null) {
+      ctx.strokeStyle = P(strokeCol);
       ctx.lineWidth = 1.5;
       ctx.stroke();
     }
@@ -136,7 +136,7 @@
   const tbl = (s, fn) => s.split(';').map((r) => fn(r.split('|')));
   const HULLS = tbl('MK.I BRONCE|BASE|5|1|1|1|8|BALANCEADO Y VERSATIL|4|3|5;MK.II FORJA|NV.1 O 100M|6|.95|1.05|.9|8|TANQUE +1 VIDA MAX, -10% PSI|8|3|6;MK.III VOLTA|NV.2 O 220M|5|1.16|1.12|.95|10|TURBO +16% MOTOR Y SUBIDA|10|17|6;MK.IV ESPECTRO|NV.3 O 360M|5|1.12|1.1|.8|14|ECO -20% PSI, +75% GRAZE|15|20|10', (a) => ({
     // _a:name _b:req _t:hp _x:tx _y:ty _s:psi _g:grz _l:trait _p:[c1,c2,c3]
-    _a: a[0], _b: a[1], _t: +a[2], _x: +a[3], _y: +a[4], _s: +a[5], _g: +a[6], _l: a[7], _p: [PAL[a[8]], PAL[a[9]], PAL[a[10]]]
+    _a: a[0], _b: a[1], _t: +a[2], _x: +a[3], _y: +a[4], _s: +a[5], _g: +a[6], _l: a[7], _p: [+a[8], +a[9], +a[10]]
   }));
 
   // SOLO indice 0 realiza PARRY (28px)! Las demas habilidades ofrecen combate/control/escudo orbital.
@@ -439,7 +439,7 @@
   let screenShake = 0;
   let damageFlash = 0;
   let bannerText = '';
-  let bannerCol = PAL[6];
+  let bannerCol = 6;
   let bannerTimer = 0;
   let deathReason = '';
   let nextBossMeters = 120;
@@ -448,6 +448,8 @@
   const keys = {};
   let touchLeft = false;
   let touchRight = false;
+  const nav = window.navigator;
+  let isMobile = !!(nav && /Mobi|Android|iP(hone|ad|od)/i.test(nav.userAgent)) || !!(window.matchMedia && matchMedia('(pointer:coarse)').matches);
 
   const isHullUnlocked = (i) => i === 0 || maxLevelReached >= i || highScore >= [0, 100, 220, 360][i];
   const isSkillUnlocked = (i) => i <= 1 || maxLevelReached >= i - 1 || highScore >= [0, 0, 100, 220][i];
@@ -473,19 +475,19 @@
 
   function showBanner(txt, col, dur) {
     bannerText = txt;
-    bannerCol = col || PAL[6];
+    bannerCol = col == null ? 6 : col;
     bannerTimer = dur || 120;
   }
 
   function spawnParticle(t, x, y, vx, vy, life, sz, col) {
     if (particles.length >= 72) particles.shift();
-    particles.push({ _t: t, _x: x, _y: y, _vx: vx, _vy: vy, _l: life, _s: sz || 2, _c: col || PAL[13] });
+    particles.push({ _t: t, _x: x, _y: y, _vx: vx, _vy: vy, _l: life, _s: sz || 2, _c: col == null ? 13 : col });
   }
 
   function burst(x, y, n, sp, l, c1, c2) {
     for (let i = 0; i < n; i++) {
       const a = (i / n) * PI2;
-      spawnParticle(1, x, y, cs(a) * sp, sn(a) * sp, l, 2, i & 1 ? c2 || c1 : c1);
+      spawnParticle(1, x, y, cs(a) * sp, sn(a) * sp, l, 2, i & 1 && c2 != null ? c2 : c1);
     }
   }
 
@@ -506,7 +508,7 @@
   }
 
   function stepBossShots(dt, minY, msg) {
-    for (let i = bossShots.length - 1; i >= 0; i--) {
+    for (let i = bossShots.length; i--;) {
       const s = bossShots[i];
       s._x += s._vx * dt;
       s._y += s._vy * dt;
@@ -516,7 +518,7 @@
         bossShots.splice(i, 1);
         score += 40;
         sfxTone(620, 960, 0.04, 1, 0.05);
-        spawnParticle(1, s._x, s._y, (rn() - 0.5) * 2, -0.8, 12, 2, PAL[10]);
+        spawnParticle(1, s._x, s._y, (rn() - 0.5) * 2, -0.8, 12, 2, 10);
         continue;
       }
       const ds = hy(drone.x - s._x, drone.y - s._y);
@@ -683,14 +685,14 @@
       const numChunks = M.ceil((lv._l * 12 + 120) / H);
       for (let i = 0; i <= numChunks; i++) activeChunks.push(createChunk(i, lvIdx, true));
       phase = 0;
-      showBanner(lv._a, PAL[6], 130);
+      showBanner(lv._a, 6, 130);
     } else {
       topChunkIndex = 2;
       for (let i = 0; i <= 2; i++) activeChunks.push(createChunk(i, 0, false));
       nextBossMeters = 200;
       levelGoalY = 200 - nextBossMeters * 12;
       phase = 0;
-      showBanner('SEMILLA ' + seed + ' | ' + lv._a, PAL[10], 130);
+      showBanner('SEMILLA ' + seed + ' | ' + lv._a, 10, 130);
     }
   }
 
@@ -709,7 +711,7 @@
     deathReason = 'CAIDO EN MAGMA';
 
     loadLevelWorld(gameMode === 0 ? startLevel : 0, false);
-    keys['Space'] = keys['Enter'] = false;
+    keys['Space'] = keys['Enter'] = touchLeft = touchRight = false;
     gameState = 1;
     playJingle(3);
   }
@@ -759,7 +761,7 @@
     }
     playJingle(1);
     screenShake = 14;
-    showBanner('JEFE DESTRUIDO! +1000 PTS', PAL[6], 130);
+    showBanner('JEFE DESTRUIDO! +1000 PTS', 6, 130);
   }
 
   function damageBoss(dmg, mode) {
@@ -767,12 +769,12 @@
     if (boss.shield > 0) {
       if (!mode && drone.overdrive <= 0) {
         sfxTone(220, 150, 0.08, 1, 0.09);
-        if (bannerTimer <= 0) showBanner('ESCUDO! USA PARRY/EMP', PAL[11], 75);
+        if (bannerTimer <= 0) showBanner('ESCUDO! USA PARRY/EMP', 11, 75);
         boss.invuln = 14;
         return;
       }
       boss.shield = 0;
-      showBanner('ROTO POR ' + (mode === 2 ? 'EMP!' : 'PARRY!'), PAL[10], 90);
+      showBanner('ROTO POR ' + (mode === 2 ? 'EMP!' : 'PARRY!'), 10, 90);
     }
 
     boss.hp = mx(0, boss.hp - dmg);
@@ -781,7 +783,7 @@
     score += dmg * 150;
     sfxTone(460, 140, 0.16, 2, 0.13);
 
-    burst(boss.x, boss.y, 10, 2.1, 18, mode ? PAL[10] : PAL[9]);
+    burst(boss.x, boss.y, 10, 2.1, 18, mode ? 10 : 9);
     if (boss.hp <= 0) defeatBoss();
   }
 
@@ -807,7 +809,7 @@
     drone.pressure = mn(drone.maxPsi, drone.pressure + HULLS[selectedHull]._g + grazeCombo * 2);
     score += 35 * grazeCombo;
     sfxTone(740, 1120, 0.05, 1, 0.05);
-    spawnParticle(1, (drone.x + ox) * 0.5, (drone.y + oy) * 0.5, (rn() - 0.5) * 2, -0.9, 14, 2, PAL[10]);
+    spawnParticle(1, (drone.x + ox) * 0.5, (drone.y + oy) * 0.5, (rn() - 0.5) * 2, -0.9, 14, 2, 10);
   }
 
   function triggerActiveSkill() {
@@ -845,9 +847,9 @@
         drone.shield = 28;
         screenShake = 8;
         score += 200 * reflected;
-        showBanner('PARRY X' + reflected + '!', PAL[10], 75);
+        showBanner('PARRY X' + reflected + '!', 10, 75);
         sfxTone(620, 1280, 0.14, 0, 0.13);
-        burst(drone.x, drone.y, 12, 2.6, 18, PAL[10]);
+        burst(drone.x, drone.y, 12, 2.6, 18, 10);
       }
     } else if (selectedSkill === 1) {
       // 1: CANON TRIPLE — 3 rayos perforantes (NO hace parry)
@@ -861,7 +863,7 @@
       drone.orbsT = 210;
       drone.orbs = 7;
       sfxTone(360, 740, 0.14, 1, 0.11);
-      burst(drone.x, drone.y, 8, 2.2, 16, PAL[10], PAL[14]);
+      burst(drone.x, drone.y, 8, 2.2, 16, 10, 14);
     } else {
       // 3: TORMENTA EMP — Pulso 96px borra balas/amenazas + rayos auto al jefe o enemigos cercanos
       drone.empR = 8;
@@ -875,7 +877,7 @@
         if (hy(s._x - drone.x, s._y - drone.y) <= 96) {
           bossShots.splice(i, 1);
           score += 35;
-          spawnParticle(1, s._x, s._y, 0, -0.6, 12, 2, PAL[10]);
+          spawnParticle(1, s._x, s._y, 0, -0.6, 12, 2, 10);
         }
       }
 
@@ -891,16 +893,15 @@
         damageBoss(1.3, 2);
       }
 
-      for (let c = 0; c < activeChunks.length; c++) {
-        const ch = activeChunks[c];
+      for (const ch of activeChunks) {
         [ch._foes, ch._saws, ch._gates, ch._vents].forEach((arr, k) => {
-          for (let i = arr.length - 1; i >= 0; i--) {
+          for (let i = arr.length; i--;) {
             const it = arr[i];
             const d = hy(it._x - drone.x, it._y - drone.y);
             if (k > 1) d <= 102 && (it._stun = 180);
             else if (d <= 96 || (zaps < 3 && d <= 165)) {
               zap(it._x, it._y);
-              burst(it._x, it._y, 6, 2.1, 15, PAL[10], PAL[6]);
+              burst(it._x, it._y, 6, 2.1, 15, 10, 6);
               if (k || (it._hp -= 1.3) <= 0) {
                 arr.splice(i, 1);
                 score += k ? 100 : 120;
@@ -921,7 +922,7 @@
       highScore = maxMeters;
       saveProg();
     }
-    burst(drone.x, drone.y, 26, 2.2, 24, PAL[6], PAL[9]);
+    burst(drone.x, drone.y, 26, 2.2, 24, 6, 9);
     sfxTone(170, 34, 0.42, 2, 0.17);
   }
 
@@ -947,7 +948,7 @@
       drone.vy = MAX_VY_UP * 1.44;
       drone.pressure = mn(drone.maxPsi, drone.pressure + 16);
       sfxTone(200, 740, 0.14, 1, 0.1);
-      for (let i = 0; i < 6; i++) spawnParticle(0, drone.x, p._y1, (rn() - 0.5) * 1.5, 1.3, 14, 2, PAL[10]);
+      for (let i = 0; i < 6; i++) spawnParticle(0, drone.x, p._y1, (rn() - 0.5) * 1.5, 1.3, 14, 2, 10);
       return true;
     }
 
@@ -1041,7 +1042,7 @@
       if (activeChunks.length > 0) {
         activeChunks[activeChunks.length - 1]._plats.push({ _x1: mx(WALL_L + 10, drone.x - 45), _y1: drone.y + 14, _x2: mn(WALL_R - 10, drone.x + 45), _y2: drone.y + 23, _w: 90, _cool: 1, _vx: 0 });
       }
-      showBanner('ENTORNO ' + LEVELS[currentLevel]._a, PAL[14], 140);
+      showBanner('ENTORNO ' + LEVELS[currentLevel]._a, 14, 140);
       return;
     }
     if (currentLevel < 3) loadLevelWorld(currentLevel + 1, true);
@@ -1076,7 +1077,7 @@
     if (phase === 3) {
       phaseTimer -= dt;
       if (((phaseTimer * 0.6) | 0) % 5 === 0 && rn() < 0.55 * dt) {
-        burst(boss.x + (rn() - 0.5) * 26, boss.y + (rn() - 0.5) * 20, 5, 2.2, 22, PAL[6], PAL[9]);
+        burst(boss.x + (rn() - 0.5) * 26, boss.y + (rn() - 0.5) * 20, 5, 2.2, 22, 6, 9);
         sfxTone(260, 70, 0.09, 2, 0.07);
       }
       if (phaseTimer <= 0) {
@@ -1120,7 +1121,7 @@
       drone.purge = mx(0, drone.purge - dt);
       drone.leftOn = false;
       drone.rightOn = false;
-      if (rn() < 0.25 * dt) spawnParticle(0, drone.x, drone.y - 5, (rn() - 0.5) * 0.7, -0.8, 16, 2, PAL[13]);
+      if (rn() < 0.25 * dt) spawnParticle(0, drone.x, drone.y - 5, (rn() - 0.5) * 0.7, -0.8, 16, 2, 13);
       if (drone.purge <= 0) drone.pressure = 42;
     } else {
       drone.leftOn = wantL;
@@ -1146,7 +1147,7 @@
       const s = i ? -1 : 1;
       ax += s * THRUST_X * hull._x * boost;
       ay += THRUST_Y * hull._y * boost;
-      if (rn() < 0.75 * dt) spawnParticle(0, drone.x - s * 5, drone.y + 4, -s * 0.6, 1.1, 12, 2, PAL[13]);
+      if (rn() < 0.75 * dt) spawnParticle(0, drone.x - s * 5, drone.y + 4, -s * 0.6, 1.1, 12, 2, 13);
     });
 
     if (drone.leftOn || drone.rightOn) {
@@ -1209,12 +1210,10 @@
       return;
     }
 
-    for (let c = 0; c < activeChunks.length; c++) {
-      const ch = activeChunks[c];
+    for (const ch of activeChunks) {
       if (ch._yBot < camY - 120 || ch._yTop > camY + H + 120) continue;
 
-      for (let i = 0; i < ch._plats.length; i++) {
-        const p = ch._plats[i];
+      for (const p of ch._plats) {
         if (p._vx) {
           p._x1 += p._vx * dt;
           if (p._x1 < WALL_L + 8 || p._x1 + p._w > WALL_R - 8) {
@@ -1230,8 +1229,7 @@
         resolveCircleAABB(p, dt);
       }
 
-      for (let i = 0; i < ch._rests.length; i++) {
-        const rs = ch._rests[i];
+      for (const rs of ch._rests) {
         if (hy(drone.x - rs._x, drone.y - rs._y) < 20) {
           drone.pressure = drone.maxPsi;
           drone.purge = 0;
@@ -1239,15 +1237,14 @@
             rs._on = 1;
             if (drone.hp < drone.maxHp) drone.hp++;
             score += 250;
-            showBanner('BASE: +1 HP Y PSI', PAL[14], 110);
+            showBanner('BASE: +1 HP Y PSI', 14, 110);
             playJingle(0);
-            burst(rs._x, rs._y, 10, 1.6, 20, PAL[14]);
+            burst(rs._x, rs._y, 10, 1.6, 20, 14);
           }
         }
       }
 
-      for (let i = 0; i < ch._cores.length; i++) {
-        const co = ch._cores[i];
+      for (const co of ch._cores) {
         if (co._on && hy(drone.x - co._x, drone.y - co._y) < drone.r + 6) {
           co._on = 0;
           drone.cores++;
@@ -1255,14 +1252,13 @@
           if (drone.cores >= 3) {
             drone.cores = 0;
             drone.overdrive = 220;
-            showBanner('OVERDRIVE!', PAL[6], 100);
+            showBanner('OVERDRIVE!', 6, 100);
             sfxTone(440, 1100, 0.25, 0, 0.12);
           } else sfxTone(660, 990, 0.08, 1, 0.09);
         }
       }
 
-      for (let i = 0; i < ch._gates.length; i++) {
-        const gt = ch._gates[i];
+      for (const gt of ch._gates) {
         if (gt._stun > 0) {
           gt._stun -= dt;
           continue;
@@ -1273,8 +1269,7 @@
         }
       }
 
-      for (let i = 0; i < ch._vents.length; i++) {
-        const vt = ch._vents[i];
+      for (const vt of ch._vents) {
         if (vt._stun > 0) {
           vt._stun -= dt;
           continue;
@@ -1290,7 +1285,7 @@
         }
       }
 
-      for (let i = ch._foes.length - 1; i >= 0; i--) {
+      for (let i = ch._foes.length; i--;) {
         const e = ch._foes[i];
         if (e._stun > 0) {
           e._stun -= dt;
@@ -1301,7 +1296,7 @@
 
         let dead = hitByOrbs(e._x, e._y, 13, 1);
         if (!dead) {
-          for (let j = playerShots.length - 1; j >= 0; j--) {
+          for (let j = playerShots.length; j--;) {
             if (hy(playerShots[j]._x - e._x, playerShots[j]._y - e._y) < 10) {
               playerShots.splice(j, 1);
               if (--e._hp <= 0) dead = 1;
@@ -1313,7 +1308,7 @@
           ch._foes.splice(i, 1);
           score += 120;
           sfxTone(360, 110, 0.12, 2, 0.1);
-          burst(e._x, e._y, 8, 2.2, 16, PAL[9]);
+          burst(e._x, e._y, 8, 2.2, 16, 9);
           continue;
         }
 
@@ -1331,7 +1326,7 @@
         else if (df < drone.r + 12) triggerGraze(e._x, e._y);
       }
 
-      for (let i = ch._saws.length - 1; i >= 0; i--) {
+      for (let i = ch._saws.length; i--;) {
         const g = ch._saws[i];
         if (g._stun > 0) {
           g._stun -= dt;
@@ -1345,7 +1340,7 @@
         if ((drone.overdrive > 0 && ds <= drone.r + g._r) || hitByOrbs(g._x, g._y, g._r + 7, 1)) {
           ch._saws.splice(i, 1);
           score += 100;
-          burst(g._x, g._y, 6, 2, 14, PAL[10]);
+          burst(g._x, g._y, 6, 2, 14, 10);
           sfxTone(320, 90, 0.12, 2, 0.1);
           continue;
         }
@@ -1413,15 +1408,15 @@
       pipes.forEach((px) => fR(px - 1, sy + 18, 14, 4, p[2]));
 
       if (lv._t === 0) {
-        fR(68, sy + 12, 6, 12, PAL[3]);
-        fR(246, sy + 12, 6, 12, PAL[3]);
+        fR(68, sy + 12, 6, 12, 3);
+        fR(246, sy + 12, 6, 12, 3);
       } else if (lv._t === 1) {
-        fR(156, sy + 24, 8, 5, ((elapsedTime * 5) | 0) & 1 ? PAL[10] : PAL[12]);
+        fR(156, sy + 24, 8, 5, ((elapsedTime * 5) | 0) & 1 ? 10 : 12);
       } else if (lv._t === 3) {
         fR(96, sy + 10, 4, 14, p[3]);
         fR(220, sy + 10, 4, 14, p[3]);
       } else {
-        fR(158, sy + 10, 4, 14, PAL[6]);
+        fR(158, sy + 10, 4, 14, 6);
       }
     }
 
@@ -1436,20 +1431,20 @@
     for (let sy = ((pWall % 24) + 24) % 24 - 24; sy < H; sy += 24) {
       [2, WALL_R + 4].forEach((wx, idx) => {
         fR(wx, sy + 2, 16, 18, p[1]);
-        fR(wx + (idx ? 6 : 5), sy + 8, 5, 6, alarmFlash ? PAL[8] : p[3]);
+        fR(wx + (idx ? 6 : 5), sy + 8, 5, 6, alarmFlash ? 8 : p[3]);
       });
     }
   }
 
   function drawDronePod(cx, cy, ang, hull, eyeDx, eyeDy, fireL, fireR, isOver, isDash) {
     rot(cx, cy, ang, () => {
-      const jC = isOver ? PAL[6] : isDash ? PAL[10] : PAL[9];
+      const jC = isOver ? 6 : isDash ? 10 : 9;
       [-9, 5].forEach((nx, i) => {
-        fR(nx, 1, 4, 5, PAL[4]);
+        fR(nx, 1, 4, 5, 4);
         if (i ? fireR : fireL) {
           const f = 7 + ((elapsedTime * 30) & 3);
           fR(nx, 6, 4, f, jC);
-          fR(nx + 1, 6, 2, fl(f * 0.5), PAL[13]);
+          fR(nx + 1, 6, 2, fl(f * 0.5), 13);
         }
       });
 
@@ -1457,19 +1452,19 @@
       if (hi === 1) {
         [-9, 6].forEach((x) => fR(x, -4, 3, 6, hull._p[0]));
       } else if (hi === 2) {
-        [-10, 6].forEach((x) => fR(x, -2, 4, 3, PAL[10]));
+        [-10, 6].forEach((x) => fR(x, -2, 4, 3, 10));
         fR(-1, -10, 2, 4, hull._p[2]);
       } else if (hi === 3) {
-        [1, -1].forEach((s, k) => fArc(s * cs(elapsedTime * 5) * 9, s * sn(elapsedTime * 5) * 6, 2, PAL[k ? 15 : 10]));
+        [1, -1].forEach((s, k) => fArc(s * cs(elapsedTime * 5) * 9, s * sn(elapsedTime * 5) * 6, 2, k ? 15 : 10));
       }
 
       fArc(0, 0, 7, hull._p[1]);
       fArc(0, 0, 6, hull._p[0]);
       fR(-2, -9, 4, 3, hull._p[2]);
-      fArc(0, 0, 4.2, PAL[0]);
-      fArc(eyeDx, eyeDy, 1.8, PAL[13]);
-      fArc(eyeDx * 1.15, eyeDy * 1.15, 0.9, PAL[0]);
-      fArc(-2, -2, 1.3, PAL[10]);
+      fArc(0, 0, 4.2, 0);
+      fArc(eyeDx, eyeDy, 1.8, 13);
+      fArc(eyeDx * 1.15, eyeDy * 1.15, 0.9, 0);
+      fArc(-2, -2, 1.3, 10);
     });
   }
 
@@ -1479,46 +1474,46 @@
     if (boss.invuln > 0 && (((boss.invuln * 0.6) | 0) & 1)) return;
 
     rot(bx, by, [elapsedTime * 1.6, -elapsedTime * 2.4, elapsedTime * 1.3, elapsedTime * 1.9][boss.type], () => {
-      const b = [[16, 18, 13, PAL[3], 9], [14, 18, 12, '#1e1b4b', 10], [12, 17, 13, PAL[16], 14], [18, 19, 14, '#3b0764', 6]][boss.type];
-      drawToothed(b[0], b[1], b[2], b[3], PAL[b[4]]);
+      const b = [[16, 18, 13, 3, 9], [14, 18, 12, '#1e1b4b', 10], [12, 17, 13, 16, 14], [18, 19, 14, '#3b0764', 6]][boss.type];
+      drawToothed(b[0], b[1], b[2], b[3], b[4]);
       if (boss.type === 0) {
-        drawToothed(10, 12, 8, PAL[7], PAL[5]);
+        drawToothed(10, 12, 8, 7, 5);
       } else if (boss.type === 1) {
-        [-21, 16].forEach((x) => fR(x, -3, 5, 6, PAL[15]));
+        [-21, 16].forEach((x) => fR(x, -3, 5, 6, 15));
       } else if (boss.type === 2) {
         for (let k = 0; k < 3; k++) {
           const a = elapsedTime * 1.7 + (k * PI2) / 3;
-          fArc(cs(a) * 19, sn(a) * 19, 3.5, PAL[14]);
+          fArc(cs(a) * 19, sn(a) * 19, 3.5, 14);
         }
       } else {
         ctx.rotate(-elapsedTime * 3.8);
-        drawToothed(8, 13, 8, PAL[15], PAL[13]);
+        drawToothed(8, 13, 8, 15, 13);
       }
-      fArc(0, 0, 7.5, PAL[0]);
+      fArc(0, 0, 7.5, 0);
       fArc(0, 0, 4.5 + sn(elapsedTime * 8), lv._p[10]);
     });
 
-    if (boss.shield > 0) fArc(bx, by, boss.r + 5, PAL[10], 2);
+    if (boss.shield > 0) fArc(bx, by, boss.r + 5, 10, 2);
   }
 
   function drawEnemyActor(e, cy) {
     rot(e._x, e._y - cy, [elapsedTime * 3, 0, -elapsedTime * 2, sn(elapsedTime * 4) * 0.25][e._t], () => {
       if (e._t === 1) {
-        fR(-7, -3, 14, 6, PAL[17]);
-        [-7, 7].forEach((x) => fArc(x, 0, 3, PAL[10]));
+        fR(-7, -3, 14, 6, 17);
+        [-7, 7].forEach((x) => fArc(x, 0, 3, 10));
       } else {
         if (e._t === 3) fR(-9, -2, 18, 4, '#581c87');
         const g = [[8, 8, 5.5, 7, 9], 0, [6, 8, 6, 16, 14], [8, 7, 4, 4, 6]][e._t];
-        drawToothed(g[0], g[1], g[2], PAL[g[3]], PAL[g[4]]);
+        drawToothed(g[0], g[1], g[2], g[3], g[4]);
       }
-      fArc(0, 0, [3, 4, 3.2, 2.5][e._t], PAL[[6, 6, 11, 8][e._t]]);
-      if (e._stun > 0) fArc(0, 0, 10, PAL[10], 1.5);
+      fArc(0, 0, [3, 4, 3.2, 2.5][e._t], [6, 6, 11, 8][e._t]);
+      if (e._stun > 0) fArc(0, 0, 10, 10, 1.5);
     });
   }
 
   function drawWorld(cy, lv) {
     if (phase === 2 || phase === 1 || phase === 3) {
-      fR(WALL_L, H - 14, PLAY_W, 3, PAL[10]);
+      fR(WALL_L, H - 14, PLAY_W, 3, 10);
       if (boss.active) drawBossActor(lv);
     } else {
       // Marcadores de horizonte V6 (tramos / torre / meta del jefe)
@@ -1532,17 +1527,15 @@
       if (gameMode !== 1) {
         const gy = (levelGoalY - cy) | 0;
         if (gy > -20 && gy < H + 20) {
-          for (let x = WALL_L; x < WALL_R; x += 12) fR(x, gy, 7, 2, ((elapsedTime * 10) | 0) & 1 ? PAL[8] : PAL[6]);
-          drawText('COMPUERTA JEFE', W * 0.5, gy - 10, PAL[6], 1, 1);
+          for (let x = WALL_L; x < WALL_R; x += 12) fR(x, gy, 7, 2, ((elapsedTime * 10) | 0) & 1 ? 8 : 6);
+          drawText('COMPUERTA JEFE', W * 0.5, gy - 10, 6, 1, 1);
         }
       }
 
-      for (let c = 0; c < activeChunks.length; c++) {
-        const ch = activeChunks[c];
+      for (const ch of activeChunks) {
         if (ch._yBot < cy - 30 || ch._yTop > cy + H + 30) continue;
 
-        for (let i = 0; i < ch._plats.length; i++) {
-          const p = ch._plats[i];
+        for (const p of ch._plats) {
           if ((p._wall && !p._bar) || p._brk > 0) continue;
           const sx = p._x1 | 0;
           const sy = (p._y1 - cy) | 0;
@@ -1550,112 +1543,104 @@
           const ph = (p._y2 - p._y1) | 0;
 
           if (p._rest) {
-            fR(sx, sy, pw, ph, PAL[16]);
-            fR(sx, sy, pw, 2, PAL[14]);
-            for (let k = 6; k < pw - 6; k += 14) fR(sx + k, sy + 4, 4, 2, PAL[13]);
-            drawText('BASE DESCANSO', sx + pw * 0.5, sy - 26, PAL[14], 1, 1);
+            fR(sx, sy, pw, ph, 16);
+            fR(sx, sy, pw, 2, 14);
+            for (let k = 6; k < pw - 6; k += 14) fR(sx + k, sy + 4, 4, 2, 13);
+            drawText('BASE DESCANSO', sx + pw * 0.5, sy - 26, 14, 1, 1);
           } else if (p._bar) {
             fR(sx, sy, pw, ph, lv._p[2]);
             fR(sx, sy, pw, 2, lv._p[3]);
           } else {
-            fR(sx, sy, pw, ph, p._frag ? PAL[3] : lv._p[4]);
-            fR(sx, sy, pw, 2, p._frag ? PAL[9] : lv._p[5]);
-            for (let rx = sx + 5; rx < sx + pw - 5; rx += 10) fR(rx, sy + 4, 4, 1, PAL[13]);
+            fR(sx, sy, pw, ph, p._frag ? 3 : lv._p[4]);
+            fR(sx, sy, pw, 2, p._frag ? 9 : lv._p[5]);
+            for (let rx = sx + 5; rx < sx + pw - 5; rx += 10) fR(rx, sy + 4, 4, 1, 13);
             if (p._spr) {
               const mxp = (sx + pw * 0.5) | 0;
-              fR(mxp - 8, sy - 3, 16, 3, PAL[5]);
-              fR(mxp - 6, sy - 5, 12, 2, PAL[10]);
+              fR(mxp - 8, sy - 3, 16, 3, 5);
+              fR(mxp - 6, sy - 5, 12, 2, 10);
             }
           }
         }
 
-        for (let i = 0; i < ch._rests.length; i++) {
-          const rs = ch._rests[i];
+        for (const rs of ch._rests) {
           const ry = rs._y - cy;
-          rot(rs._x, ry, rs._on ? 0 : elapsedTime * 2, () => drawToothed(8, 10, 8, rs._on ? PAL[1] : PAL[16], rs._on ? PAL[12] : PAL[14]));
-          fArc(rs._x, ry, 4, rs._on ? PAL[12] : PAL[10]);
+          rot(rs._x, ry, rs._on ? 0 : elapsedTime * 2, () => drawToothed(8, 10, 8, rs._on ? 1 : 16, rs._on ? 12 : 14));
+          fArc(rs._x, ry, 4, rs._on ? 12 : 10);
           if (!rs._on) {
-            fR(rs._x - 3, ry - 1, 6, 2, PAL[13]);
-            fR(rs._x - 1, ry - 3, 2, 6, PAL[13]);
+            fR(rs._x - 3, ry - 1, 6, 2, 13);
+            fR(rs._x - 1, ry - 3, 2, 6, 13);
           }
         }
 
-        for (let i = 0; i < ch._cores.length; i++) {
-          const co = ch._cores[i];
+        for (const co of ch._cores) {
           if (!co._on) continue;
           rot(co._x, co._y - cy + sn(elapsedTime * 5) * 1.5, elapsedTime * 3, () => {
-            fR(-4, -4, 8, 8, PAL[5]);
+            fR(-4, -4, 8, 8, 5);
             ctx.rotate(M.PI * 0.25);
-            fR(-3, -3, 6, 6, PAL[6]);
-            fArc(0, 0, 1.5, PAL[13]);
+            fR(-3, -3, 6, 6, 6);
+            fArc(0, 0, 1.5, 13);
           });
         }
 
         // Valvulas de vapor laterales V6
-        for (let i = 0; i < ch._vents.length; i++) {
-          const vt = ch._vents[i];
+        for (const vt of ch._vents) {
           const vy = vt._y - cy;
           const cyc = cycOf(vt);
-          fR(vt._dir > 0 ? vt._x : vt._x - 7, vy - 4, 7, 8, PAL[4]);
-          fArc(vt._x + vt._dir * 3, vy, 2, cyc >= 72 && cyc < 106 ? PAL[6] : PAL[8]);
+          fR(vt._dir > 0 ? vt._x : vt._x - 7, vy - 4, 7, 8, 4);
+          fArc(vt._x + vt._dir * 3, vy, 2, cyc >= 72 && cyc < 106 ? 6 : 8);
           if (vt._stun <= 0 && cyc >= 106 && cyc < 144) {
             for (let k = 0; k < 5; k++) {
-              fArc(vt._x + vt._dir * (10 + k * 10), vy + sn(elapsedTime * 18 + k) * 2, 5 - k * 0.6, k < 2 ? PAL[9] : PAL[13]);
+              fArc(vt._x + vt._dir * (10 + k * 10), vy + sn(elapsedTime * 18 + k) * 2, 5 - k * 0.6, k < 2 ? 9 : 13);
             }
           }
         }
 
         // Compuertas telescopicas V6
-        for (let i = 0; i < ch._gates.length; i++) {
-          const gt = ch._gates[i];
+        for (const gt of ch._gates) {
           const cyc = cycOf(gt);
           const sy = (gt._y - cy) | 0;
-          fR(gt._x, sy - 4, 4, 8, PAL[4]);
-          fR(gt._x + gt._w - 4, sy - 4, 4, 8, PAL[4]);
+          fR(gt._x, sy - 4, 4, 8, 4);
+          fR(gt._x + gt._w - 4, sy - 4, 4, 8, 4);
           if (gt._stun <= 0) {
-            if (cyc >= 80 && cyc < 102 && (((elapsedTime * 16) | 0) & 1)) fR(gt._x + 4, sy, gt._w - 8, 2, PAL[6]);
+            if (cyc >= 80 && cyc < 102 && (((elapsedTime * 16) | 0) & 1)) fR(gt._x + 4, sy, gt._w - 8, 2, 6);
             else if (cyc >= 102 && cyc < 138) {
-              fR(gt._x + 4, sy - 2, gt._w - 8, 4, PAL[8]);
-              fR(gt._x + 4, sy - 1, gt._w - 8, 2, PAL[13]);
+              fR(gt._x + 4, sy - 2, gt._w - 8, 4, 8);
+              fR(gt._x + 4, sy - 1, gt._w - 8, 2, 13);
             }
           }
         }
 
-        for (let i = 0; i < ch._foes.length; i++) drawEnemyActor(ch._foes[i], cy);
+        for (const e of ch._foes) drawEnemyActor(e, cy);
 
-        for (let i = 0; i < ch._saws.length; i++) {
-          const g = ch._saws[i];
+        for (const g of ch._saws) {
           rot(g._x, g._y - cy, g._ang, () => {
-            drawToothed(14, g._r + 1.5, g._r - 2, g._stun > 0 ? PAL[10] : lv._p[6], lv._p[7]);
-            fArc(0, 0, 3, PAL[0]);
-            fArc(0, 0, 1.5, g._stun > 0 ? PAL[11] : PAL[8]);
+            drawToothed(14, g._r + 1.5, g._r - 2, g._stun > 0 ? 10 : lv._p[6], lv._p[7]);
+            fArc(0, 0, 3, 0);
+            fArc(0, 0, 1.5, g._stun > 0 ? 11 : 8);
           });
         }
       }
     }
 
-    for (let i = 0; i < playerShots.length; i++) {
-      const ps = playerShots[i];
-      fArc(ps._x, ps._y - cy, ps._t ? 4 : 3, ps._t ? PAL[10] : PAL[6]);
-      fArc(ps._x, ps._y - cy, 1.5, PAL[13]);
+    for (const ps of playerShots) {
+      fArc(ps._x, ps._y - cy, ps._t ? 4 : 3, ps._t ? 10 : 6);
+      fArc(ps._x, ps._y - cy, 1.5, 13);
     }
 
     const canShowParryHint = selectedSkill === 0 && drone.slamCd <= 0;
-    for (let i = 0; i < bossShots.length; i++) {
-      const s = bossShots[i];
+    for (const s of bossShots) {
       const sx = s._x | 0;
       const sy = (s._y - cy) | 0;
       const near = canShowParryHint && hy(s._x - drone.x, s._y - drone.y) <= PARRY_RADIUS + 6;
-      fArc(sx, sy, s._r, near ? PAL[10] : PAL[9]);
-      fArc(sx, sy, 1.5, PAL[13]);
-      if (near) sR(sx - 6, sy - 6, 12, 12, PAL[10]);
+      fArc(sx, sy, s._r, near ? 10 : 9);
+      fArc(sx, sy, 1.5, 13);
+      if (near) sR(sx - 6, sy - 6, 12, 12, 10);
     }
 
-    for (let i = 0; i < empBolts.length; i++) {
-      const b = empBolts[i];
+    for (const b of empBolts) {
       const y1 = b._y1 - cy;
       const y2 = b._y2 - cy;
-      ctx.strokeStyle = ((b._t | 0) & 1) ? PAL[13] : PAL[10];
+      ctx.strokeStyle = P(((b._t | 0) & 1) ? 13 : 10);
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(b._x1, y1);
@@ -1676,10 +1661,10 @@
       fArc(
         dx, dy,
         drone.parryRing > 0 ? PARRY_RADIUS : drone.empR > 0 ? drone.empR : 11,
-        drone.overdrive > 0 ? PAL[6] : PAL[10],
+        drone.overdrive > 0 ? 6 : 10,
         drone.parryRing > 0 || drone.empR > 0 ? 2 : 1.5
       );
-      if (drone.empR > 12) fArc(dx, dy, drone.empR * 0.68, PAL[6], 1.5);
+      if (drone.empR > 12) fArc(dx, dy, drone.empR * 0.68, 6, 1.5);
     }
 
     if (drone.orbsT > 0 && drone.orbs && (drone.orbsT > 35 || ((drone.orbsT * 0.5) | 0) & 1)) {
@@ -1689,9 +1674,9 @@
         const a = elapsedTime * 5.4 + (k * PI2) / 3;
         const ox = dx + cs(a) * 24;
         const oy = dy + sn(a) * 24;
-        fArc(ox, oy, 4.5, PAL[10]);
-        fArc(ox, oy, 2, PAL[13]);
-        fArc(ox, oy, 6, PAL[6], 1);
+        fArc(ox, oy, 4.5, 10);
+        fArc(ox, oy, 2, 13);
+        fArc(ox, oy, 6, 6, 1);
       }
     }
 
@@ -1723,38 +1708,39 @@
   }
 
   function drawHUD(lv) {
-    fR(0, 0, W, 24, PAL[0]);
+    uiBtns = [];
+    fR(0, 0, W, 24, 0);
     fR(0, 23, W, 2, lv._p[3]);
 
-    drawText('HP', 6, 4, PAL[11], 1, 0);
-    for (let i = 0; i < drone.maxHp; i++) fR(20 + i * 7, 4, 5, 7, i < drone.hp ? (drone.hp <= 1 ? PAL[8] : PAL[5]) : PAL[1]);
+    drawText('HP', 6, 4, 11, 1, 0);
+    for (let i = 0; i < drone.maxHp; i++) fR(20 + i * 7, 4, 5, 7, i < drone.hp ? (drone.hp <= 1 ? 8 : 5) : 1);
 
-    drawText('PSI', 6, 13, PAL[6], 1, 0);
-    fR(28, 13, 56, 7, PAL[1]);
+    drawText('PSI', 6, 13, 6, 1, 0);
+    fR(28, 13, 56, 7, 1);
     const rPsi = drone.pressure / drone.maxPsi;
-    fR(29, 14, fl(54 * rPsi), 5, drone.purge > 0 ? PAL[8] : phase === 2 || drone.overdrive > 0 ? PAL[10] : rPsi < 0.25 ? PAL[9] : PAL[5]);
-    if (phase === 2) drawText('INF', 87, 13, PAL[10], 1, 0);
+    fR(29, 14, fl(54 * rPsi), 5, drone.purge > 0 ? 8 : phase === 2 || drone.overdrive > 0 ? 10 : rPsi < 0.25 ? 9 : 5);
+    if (phase === 2) drawText('INF', 87, 13, 10, 1, 0);
 
     const goalText = gameMode === 1 ? maxMeters + 'M' : maxMeters + '/' + (gameMode ? nextBossMeters : lv._l) + 'M';
-    drawText(lv._a, 160, 4, PAL[6], 1, 1, PAL[13]);
-    drawText('ALT:' + goalText + (grazeCombo > 1 ? ' X' + grazeCombo : ''), 160, 13, PAL[11], 1, 1);
+    drawText(lv._a, 160, 4, 6, 1, 1, 13);
+    drawText('ALT:' + goalText + (grazeCombo > 1 ? ' X' + grazeCombo : ''), 160, 13, 11, 1, 1);
 
     const ready = drone.slamCd <= 0 && drone.purge <= 0;
-    drawText('HAB:' + (ready ? 'LISTA' : fl(drone.slamCd / 6)), 314, 4, ready ? PAL[14] : PAL[4], 1, 2);
-    drawText('PTS:' + score, 314, 13, PAL[5], 1, 2);
+    drawText('HAB:' + (ready ? 'LISTA' : fl(drone.slamCd / 6)), 314, 4, ready ? 14 : 4, 1, 2);
+    drawText('PTS:' + score, 314, 13, 5, 1, 2);
 
     let slotY = 27;
     if (phase === 2 || phase === 1) {
-      drawPanel(WALL_L + 8, slotY, PLAY_W - 16, 16, PAL[0], PAL[8]);
-      drawText(lv._b, W * 0.5, slotY + 2, PAL[6], 1, 1);
-      fR(WALL_L + 14, slotY + 10, PLAY_W - 28, 4, PAL[1]);
-      fR(WALL_L + 14, slotY + 10, fl(((PLAY_W - 28) * boss.hp) / boss.maxHp), 4, boss.shield > 0 ? PAL[10] : PAL[8]);
+      drawPanel(WALL_L + 8, slotY, PLAY_W - 16, 16, 0, 8);
+      drawText(lv._b, W * 0.5, slotY + 2, 6, 1, 1);
+      fR(WALL_L + 14, slotY + 10, PLAY_W - 28, 4, 1);
+      fR(WALL_L + 14, slotY + 10, fl(((PLAY_W - 28) * boss.hp) / boss.maxHp), 4, boss.shield > 0 ? 10 : 8);
       slotY += 18;
     } else if (gameMode !== 1) {
       const distM = mx(0, fl((drone.y - levelGoalY) / 12));
       if (distM > 0 && distM <= 30) {
         fR(WALL_L + 30, slotY, PLAY_W - 60, 11, BG9);
-        drawText('JEFE A ' + distM + 'M!', W * 0.5, slotY + 2, distM <= 12 ? PAL[8] : PAL[6], 1, 1);
+        drawText('JEFE A ' + distM + 'M!', W * 0.5, slotY + 2, distM <= 12 ? 8 : 6, 1, 1);
         slotY += 13;
       }
     }
@@ -1766,30 +1752,44 @@
 
     if (phase === 1) {
       const sh = fl(mn(24, ab(sn(elapsedTime * 5)) * 18 + 6));
-      fR(WALL_L, 25, sh, H - 25, PAL[0]);
-      fR(WALL_R - sh, 25, sh, H - 25, PAL[0]);
+      fR(WALL_L, 25, sh, H - 25, 0);
+      fR(WALL_R - sh, 25, sh, H - 25, 0);
       fR(0, 88, W, 62, BG9);
-      fR(0, 88, W, 2, PAL[8]);
-      fR(0, 148, W, 2, PAL[8]);
-      drawText('!! WARNING !!', W * 0.5, 96, ((elapsedTime * 10) | 0) & 1 ? PAL[8] : PAL[6], 2, 1, PAL[13]);
-      drawText('VS ' + lv._b, W * 0.5, 116, PAL[10], 1, 1);
-      drawText(lv._s, W * 0.5, 130, PAL[4], 1, 1);
+      fR(0, 88, W, 2, 8);
+      fR(0, 148, W, 2, 8);
+      drawText('!! WARNING !!', W * 0.5, 96, ((elapsedTime * 10) | 0) & 1 ? 8 : 6, 2, 1, 13);
+      drawText('VS ' + lv._b, W * 0.5, 116, 10, 1, 1);
+      drawText(lv._s, W * 0.5, 130, 4, 1, 1);
     } else if (phase === 4) {
-      drawPanel(28, 50, W - 56, 138, PAL[0], PAL[4]);
-      drawText('NIVEL COMPLETADO', W * 0.5, 60, PAL[5], 2, 1, PAL[6]);
-      drawText(lv._a, W * 0.5, 82, PAL[10], 1, 1);
+      drawPanel(28, 50, W - 56, 138, 0, 4);
+      drawText('NIVEL COMPLETADO', W * 0.5, 60, 5, 2, 1, 6);
+      drawText(lv._a, W * 0.5, 82, 10, 1, 1);
       drawDronePod(66, 122 + sn(elapsedTime * 8) * 3, 0, HULLS[selectedHull], 0, -1.2, 1, 1, 0, 0);
       [['PUNTOS: ' + score, 13], ['SIGUIENTE NIVEL', 14], ['+1 HP AL SUBIR', 11]].forEach(([t, c], i) =>
-        drawText(t, 184, 106 + i * 17, PAL[c], 1, 1)
+        drawText(t, 184, 106 + i * 17, c, 1, 1)
       );
-      drawText('[ESP] CONTINUAR', W * 0.5, 168, PAL[4], 1, 1);
+      drawText(isMobile ? 'TOCA CONTINUAR' : '[ESP] CONTINUAR', W * 0.5, 168, 4, 1, 1);
     } else if (phase === 5) {
-      drawPanel(24, 42, W - 48, 156, PAL[0], PAL[5]);
-      drawText('MISION CUMPLIDA!', W * 0.5, 54, PAL[6], 2, 1, PAL[13]);
+      drawPanel(24, 42, W - 48, 156, 0, 5);
+      drawText('MISION CUMPLIDA!', W * 0.5, 54, 6, 2, 1, 13);
       [['CIUDADELA DERROTADA', 78, 10], ['PUNTOS: ' + score, 102, 14], ['TIEMPO: ' + fl(runSeconds) + 'S', 118, 13], ['NIVELES COMPLETOS', 136, 11]].forEach(([t, y, c]) =>
-        drawText(t, W * 0.5, y, PAL[c], 1, 1)
+        drawText(t, W * 0.5, y, c, 1, 1)
       );
-      addBtn(84, 158, W - 168, 22, 'MENU [ESP]', PAL[2], goMenu, PAL[5]);
+      addBtn(84, 158, W - 168, 22, 'MENU [ESP]', 2, goMenu, 5);
+    }
+
+    if (isMobile && gameState === 1 && (phase === 0 || phase === 2)) {
+      ctx.globalAlpha = 0.62;
+      const tBtn = (x, y, w, h, lbl, bg, bc, tc) => {
+        drawPanel(x, y, w, h, bg, bc);
+        drawText(lbl, x + w * 0.5, y + ((h - 7) * 0.5) | 0, tc, 1, 1);
+      };
+      tBtn(6, 204, 46, 28, '<', touchLeft ? 3 : 0, touchLeft ? 6 : 4, touchLeft ? 6 : 13);
+      tBtn(268, 204, 46, 28, '>', touchRight ? 3 : 0, touchRight ? 6 : 4, touchRight ? 6 : 13);
+      const canSk = ready && (phase === 2 || drone.overdrive > 0 || drone.pressure >= SKILLS[selectedSkill]._c);
+      tBtn(132, 208, 56, 24, ready ? 'HAB' : drone.purge > 0 ? 'PUR' : fl(drone.slamCd / 6), canSk ? 19 : 0, canSk ? 14 : ready ? 9 : 8, canSk ? 13 : 11);
+      tBtn(295, 27, 22, 16, '||', 0, 10, 13);
+      ctx.globalAlpha = 1;
     }
 
     if (damageFlash > 0) fR(0, 0, W, H, 'rgba(239,68,68,' + mn(0.35, damageFlash * 0.025) + ')');
@@ -1810,8 +1810,8 @@
     sfxTone(440, 620, 0.05, 1, 0.06);
   };
   function addBtn(x, y, w, h, label, bg, fn, borderCol) {
-    drawPanel(x, y, w, h, bg || PAL[1], borderCol || PAL[4]);
-    drawText(label, x + w * 0.5, y + ((h - 7) * 0.5) | 0, PAL[13], 1, 1);
+    drawPanel(x, y, w, h, bg == null ? 1 : bg, borderCol == null ? 4 : borderCol);
+    drawText(label, x + w * 0.5, y + ((h - 7) * 0.5) | 0, 13, 1, 1);
     uiBtns.push({ _x: x, _y: y, _w: w, _l: h, _g: fn });
   }
 
@@ -1830,84 +1830,85 @@
     uiBtns = [];
     const lv = LEVELS[gameMode === 0 ? startLevel : (((elapsedTime * 0.2) | 0) % 4)];
     drawBackground(elapsedTime * -14, lv);
-    drawPanel(14, 10, W - 28, H - 20, BG9, PAL[4]);
+    drawPanel(14, 10, W - 28, H - 20, BG9, 4);
 
-    drawText('STEAM HOPPER', W * 0.5, 18, PAL[5], 2, 1, PAL[6]);
+    drawText('STEAM HOPPER', W * 0.5, 18, 5, 2, 1, 6);
 
-    [['INICIO', PAL[3], 6], ['HANGAR [T]', PAL[18], 10], ['GUIA [G]', PAL[19], 14]].forEach((t, i) =>
-      addBtn(26 + i * 92, 38, 84, 15, t[0], menuTab === i ? t[1] : PAL[1], () => (menuTab = i), menuTab === i ? PAL[t[2]] : PAL[4])
+    [['INICIO', 3, 6], ['HANGAR [T]', 18, 10], ['GUIA [G]', 19, 14]].forEach((t, i) =>
+      addBtn(26 + i * 92, 38, 84, 15, t[0], menuTab === i ? t[1] : 1, () => (menuTab = i), menuTab === i ? t[2] : 4)
     );
 
     if (menuTab === 0) {
       drawDronePod(W * 0.5, 70 + sn(elapsedTime * 3) * 2, sn(elapsedTime * 2) * 0.08, HULLS[selectedHull], sn(elapsedTime) * 1.4, -0.8, 1, 1, 0, 0);
 
-      drawText('MODO [M]:', W * 0.5, 92, PAL[11], 1, 1);
-      addBtn(36, 103, W - 72, 17, '< ' + ['HISTORIA (NV.1-4)', 'BOSS RUSH (4 JEFES)', 'TORRE INFINITA'][gameMode] + ' >', PAL[1], cycleMode, PAL[10]);
+      drawText('MODO [M]:', W * 0.5, 92, 11, 1, 1);
+      addBtn(36, 103, W - 72, 17, '< ' + ['HISTORIA (NV.1-4)', 'BOSS RUSH (4 JEFES)', 'TORRE INFINITA'][gameMode] + ' >', 1, cycleMode, 10);
 
       if (gameMode === 0) {
-        addBtn(36, 125, W - 72, 17, 'NIVEL [E]: ' + LEVELS[startLevel]._a, PAL[1], cycleStartLevel, PAL[5]);
+        addBtn(36, 125, W - 72, 17, 'NIVEL [E]: ' + LEVELS[startLevel]._a, 1, cycleStartLevel, 5);
       } else if (gameMode === 2) {
-        addBtn(36, 125, 138, 17, 'SEMILLA [F]: ' + seed, PAL[1], editSeed, PAL[5]);
-        addBtn(178, 125, 106, 17, 'AZAR [R]: ' + (randomSeed ? 'SI' : 'NO'), randomSeed ? PAL[18] : PAL[1], toggleRnd, PAL[10]);
+        addBtn(36, 125, 138, 17, 'SEMILLA [F]: ' + seed, 1, editSeed, 5);
+        addBtn(178, 125, 106, 17, 'AZAR [R]: ' + (randomSeed ? 'SI' : 'NO'), randomSeed ? 18 : 1, toggleRnd, 10);
       } else {
-        drawText('DUELO VS 4 JEFES', W * 0.5, 130, PAL[6], 1, 1);
+        drawText('DUELO VS 4 JEFES', W * 0.5, 130, 6, 1, 1);
       }
 
-      drawText('NAVE: ' + HULLS[selectedHull]._a + ' | ' + SKILLS[selectedSkill]._a, W * 0.5, 150, PAL[13], 1, 1);
-      drawText('RECORD: ' + highScore + 'M | AUDIO [S]: ' + ['TODO', 'SFX', 'MUTE'][soundMode], W * 0.5, 163, PAL[4], 1, 1);
-      addBtn(68, 182, W - 136, 26, PLAY_LBL, PAL[3], startGame, PAL[6]);
+      drawText('NAVE: ' + HULLS[selectedHull]._a + ' | ' + SKILLS[selectedSkill]._a, W * 0.5, 150, 13, 1, 1);
+      drawText('RECORD: ' + highScore + 'M | AUDIO [S]: ' + ['TODO', 'SFX', 'MUTE'][soundMode], W * 0.5, 163, 4, 1, 1);
+      if (isMobile) uiBtns.push({ _x: 150, _y: 158, _w: 115, _l: 16, _g: () => (soundMode = (soundMode + 1) % 3) });
+      addBtn(68, 182, W - 136, 26, PLAY_LBL, 3, startGame, 6);
     } else if (menuTab === 1) {
       const ah = HULLS[inspectHull];
       const sk = SKILLS[inspectSkill];
       const uh = isHullUnlocked(inspectHull);
       const us = isSkillUnlocked(inspectSkill);
 
-      drawText('VEHICULO [1-4]', 22, 58, PAL[10], 1, 0);
-      drawText('HABILIDAD [Q]', 186, 58, PAL[6], 1, 0);
+      drawText('VEHICULO [1-4]', 22, 58, 10, 1, 0);
+      drawText('HABILIDAD [Q]', 186, 58, 6, 1, 0);
 
       for (let i = 0; i < 4; i++) {
         [
-          [20, (i + 1) + '.' + HULLS[i]._a, isHullUnlocked(i), selectedHull === i, inspectHull === i, PAL[18], () => {
+          [20, (i + 1) + '.' + HULLS[i]._a, isHullUnlocked(i), selectedHull === i, inspectHull === i, 18, () => {
             inspectHull = i;
             if (isHullUnlocked(i)) selectedHull = i;
           }],
-          [184, SKILLS[i]._a, isSkillUnlocked(i), selectedSkill === i, inspectSkill === i, PAL[3], () => {
+          [184, SKILLS[i]._a, isSkillUnlocked(i), selectedSkill === i, inspectSkill === i, 3, () => {
             inspectSkill = i;
             if (isSkillUnlocked(i)) selectedSkill = i;
           }]
         ].forEach(([x, nm, ok, sel, ins, cBg, fn]) =>
-          addBtn(x, 68 + i * 14, 116, 13, (sel ? '>' : '') + nm + (ok ? '' : '*'), sel ? cBg : ins ? PAL[2] : PAL[1], fn, sel ? PAL[6] : ok ? PAL[4] : PAL[12])
+          addBtn(x, 68 + i * 14, 116, 13, (sel ? '>' : '') + nm + (ok ? '' : '*'), sel ? cBg : ins ? 2 : 1, fn, sel ? 6 : ok ? 4 : 12)
         );
       }
 
       // Visor animado del vehiculo seleccionado/inspeccionado
-      drawPanel(140, 58, 40, 65, PAL[0], uh ? ah._p[0] : PAL[8]);
-      fR(146, 103, 28, 2, uh ? ah._p[2] : PAL[12]);
+      drawPanel(140, 58, 40, 65, 0, uh ? ah._p[0] : 8);
+      fR(146, 103, 28, 2, uh ? ah._p[2] : 12);
       rot(160, 82, 0, () => {
         ctx.scale(1.25, 1.25);
         drawDronePod(0, sn(elapsedTime * 3) * 1.6, sn(elapsedTime * 2) * 0.1, ah, sn(elapsedTime) * 1.4, -0.8, 1, 1, 0, inspectSkill === 2);
       });
-      drawText(selectedHull === inspectHull ? 'LISTO' : uh ? 'USAR' : 'BLOQ', 160, 110, selectedHull === inspectHull ? PAL[14] : uh ? PAL[6] : PAL[8], 1, 1);
+      drawText(selectedHull === inspectHull ? 'LISTO' : uh ? 'USAR' : 'BLOQ', 160, 110, selectedHull === inspectHull ? 14 : uh ? 6 : 8, 1, 1);
 
       // Tarjeta intuitiva con barras legibles + rasgo real y desbloqueo
-      drawPanel(22, 128, W - 44, 50, PAL[0], PAL[10]);
+      drawPanel(22, 128, W - 44, 50, 0, 10);
 
       [['VIDA:' + ah._t, 28, 74, 30, ah._t * 5, 14], ['VEL', 110, 132, 42, fl(ah._x * 34), 10], ['AHORRO', 180, 220, 52, fl((1.3 - ah._s) * 90), 6]].forEach((b) => {
-        drawText(b[0], b[1], 133, PAL[b[5]], 1, 0);
-        fR(b[2], 134, b[3], 5, PAL[1]);
-        fR(b[2], 134, b[4], 5, PAL[b[5]]);
+        drawText(b[0], b[1], 133, b[5], 1, 0);
+        fR(b[2], 134, b[3], 5, 1);
+        fR(b[2], 134, b[4], 5, b[5]);
       });
 
-      drawText(uh ? ah._l : 'BLOQUEADA: ' + ah._b, W * 0.5, 145, uh ? PAL[13] : PAL[8], 1, 1);
-      drawText('HAB: ' + sk._a + ' (' + sk._c + ' PSI)' + (us ? '' : ' [' + sk._b + ']'), W * 0.5, 156, us ? PAL[6] : PAL[9], 1, 1);
-      drawText(sk._t, W * 0.5, 167, PAL[11], 1, 1);
-      addBtn(76, 184, W - 152, 24, PLAY_LBL, PAL[3], startGame, PAL[6]);
+      drawText(uh ? ah._l : 'BLOQUEADA: ' + ah._b, W * 0.5, 145, uh ? 13 : 8, 1, 1);
+      drawText('HAB: ' + sk._a + ' (' + sk._c + ' PSI)' + (us ? '' : ' [' + sk._b + ']'), W * 0.5, 156, us ? 6 : 9, 1, 1);
+      drawText(sk._t, W * 0.5, 167, 11, 1, 1);
+      addBtn(76, 184, W - 152, 24, PLAY_LBL, 3, startGame, 6);
     } else {
-      drawPanel(24, 62, W - 48, 114, PAL[0], PAL[14]);
+      drawPanel(24, 62, W - 48, 114, 0, 14);
       ['A/D O FLECHAS: MOVER', 'AMBOS BOTONES: SUBIR', 'ESP/ABAJO: HABILIDAD', 'PARRY REFLEJA BALAS', 'BASE: +1 HP Y PSI', '3 NUCLEOS: OVERDRIVE', '[S] AUDIO | [C] CRT | [P] PAUSA'].forEach((t, i) => {
-        drawText(t, W * 0.5, 70 + i * 13, PAL[[13, 11, 6, 10, 14, 9, 4][i]], 1, 1);
+        drawText(t, W * 0.5, 70 + i * 13, [13, 11, 6, 10, 14, 9, 4][i], 1, 1);
       });
-      addBtn(76, 184, W - 152, 24, PLAY_LBL, PAL[19], startGame, PAL[14]);
+      addBtn(76, 184, W - 152, 24, PLAY_LBL, 19, startGame, 14);
     }
   }
 
@@ -1915,24 +1916,24 @@
     uiBtns = [];
     const isPause = gameState === 3;
     const lockS = !isPause && phaseTimer > 0 ? M.ceil(phaseTimer / 60) : 0;
-    drawPanel(28, 30, W - 56, H - 60, BG9, isPause ? PAL[10] : PAL[8]);
-    drawText(isPause ? 'PAUSA' : 'FIN DE PARTIDA', W * 0.5, 42, isPause ? PAL[10] : PAL[9], 2, 1, PAL[13]);
-    drawText(isPause ? LEVELS[currentLevel % 4]._a : deathReason, W * 0.5, 64, isPause ? PAL[6] : PAL[8], 1, 1);
+    drawPanel(28, 30, W - 56, H - 60, BG9, isPause ? 10 : 8);
+    drawText(isPause ? 'PAUSA' : 'FIN DE PARTIDA', W * 0.5, 42, isPause ? 10 : 9, 2, 1, 13);
+    drawText(isPause ? LEVELS[currentLevel % 4]._a : deathReason, W * 0.5, 64, isPause ? 6 : 8, 1, 1);
 
     [['ALTURA: ' + maxMeters + 'M | PUNTOS: ' + score, 13], ['RECORD: ' + highScore + 'M', 5], ['HABILIDAD: ' + SKILLS[selectedSkill]._a, 11]].forEach(([t, c], i) =>
-      drawText(t, W * 0.5, 86 + i * 16, PAL[c], 1, 1)
+      drawText(t, W * 0.5, 86 + i * 16, c, 1, 1)
     );
 
     if (lockS) {
-      drawPanel(56, 138, W - 112, 48, PAL[1], PAL[8]);
-      drawText('RESUMEN PARTIDA', W * 0.5, 148, PAL[11], 1, 1);
-      drawText('ESPERA ' + lockS + 'S', W * 0.5, 164, PAL[6], 1, 1);
+      drawPanel(56, 138, W - 112, 48, 1, 8);
+      drawText('RESUMEN PARTIDA', W * 0.5, 148, 11, 1, 1);
+      drawText('ESPERA ' + lockS + 'S', W * 0.5, 164, 6, 1, 1);
     } else {
-      addBtn(56, 138, W - 112, 22, isPause ? 'CONTINUAR [ESP]' : 'REINTENTAR [ESP]', PAL[3], () => {
+      addBtn(56, 138, W - 112, 22, isPause ? 'CONTINUAR [ESP]' : 'REINTENTAR [ESP]', 3, () => {
         if (isPause) gameState = 1;
         else startGame();
-      }, PAL[6]);
-      addBtn(56, 166, W - 112, 20, 'MENU [M]', PAL[1], goMenu, PAL[10]);
+      }, 6);
+      addBtn(56, 166, W - 112, 20, 'MENU [M]', 1, goMenu, 10);
     }
   }
 
@@ -2011,34 +2012,63 @@
     keys[e.code] = false;
   });
 
-  onEv('mousedown', (e) => {
-    initAudio();
-    const [rx, ry] = ptr(e);
+  function hitUI(rx, ry) {
     const cx = rx * W;
     const cy = ry * H;
     for (let i = uiBtns.length - 1; i >= 0; i--) {
       const b = uiBtns[i];
       if (cx >= b._x && cx <= b._x + b._w && cy >= b._y && cy <= b._y + b._l) {
         b._g();
-        return;
+        return 1;
       }
     }
+    return 0;
+  }
+
+  onEv('mousedown', (e) => {
+    initAudio();
+    hitUI(...ptr(e));
   });
+
+  const isHabHit = (cx, cy) => cx >= 124 && cx <= 196 && cy >= 198;
+  const isPauseHit = (cx, cy) => cx >= 284 && cx <= W + 8 && cy >= 22 && cy <= 52;
+  const eachTouch = (list, fn) => {
+    for (let i = 0; i < list.length; i++) {
+      const [rx, ry] = ptr(list[i], canvas.getBoundingClientRect());
+      if (fn(rx, ry, rx * W, ry * H)) return 1;
+    }
+  };
 
   function handleTouches(e) {
     e.preventDefault();
     initAudio();
-    touchLeft = false;
-    touchRight = false;
-    const rect = canvas.getBoundingClientRect();
-    for (let i = 0; i < e.touches.length; i++) {
-      const [rx, ry] = ptr(e.touches[i], rect);
-      if (gameState === 1 && ry > 0.72 && e.type === 'touchstart') triggerActiveSkill();
-      else if (rx < 0.5) touchLeft = true;
-      else touchRight = true;
+    isMobile = true;
+    touchLeft = touchRight = false;
+    const isStart = e.type === 'touchstart';
+    const ch = e.changedTouches;
+
+    if (gameState !== 1 || phase === 5) {
+      if (isStart && !(gameState === 2 && phaseTimer > 0)) eachTouch(ch, (rx, ry) => hitUI(rx, ry));
+      return;
     }
+    if (phase === 4) {
+      if (isStart && phaseTimer < 120) advanceAfterBoss();
+      return;
+    }
+    if (phase !== 0 && phase !== 2) return;
+    if (isStart && eachTouch(ch, (rx, ry, cx, cy) => {
+      if (isPauseHit(cx, cy)) return (gameState = 3);
+      if (isHabHit(cx, cy)) triggerActiveSkill();
+    })) return;
+
+    eachTouch(e.touches, (rx, ry, cx, cy) => {
+      if (!isPauseHit(cx, cy) && !isHabHit(cx, cy)) {
+        if (rx < 0.5) touchLeft = true;
+        else touchRight = true;
+      }
+    });
   }
-  ['touchstart', 'touchmove', 'touchend'].forEach((ev) => onEv(ev, handleTouches, { passive: false }));
+  ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach((ev) => onEv(ev, handleTouches, { passive: false }));
 
   // =========================================================================
   // 12. BUCLE PRINCIPAL 240 FPS
