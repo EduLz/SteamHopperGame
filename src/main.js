@@ -1252,7 +1252,7 @@
           if (drone.cores >= 3) {
             drone.cores = 0;
             drone.overdrive = 220;
-            showBanner('OVERDRIVE!', 6, 100);
+            showBanner('POTENCIADO!', 6, 100);
             sfxTone(440, 1100, 0.25, 0, 0.12);
           } else sfxTone(660, 990, 0.08, 1, 0.09);
         }
@@ -1905,7 +1905,7 @@
       addBtn(76, 184, W - 152, 24, PLAY_LBL, 3, startGame, 6);
     } else {
       drawPanel(24, 62, W - 48, 114, 0, 14);
-      ['A/D O FLECHAS: MOVER', 'AMBOS BOTONES: SUBIR', 'ESP/ABAJO: HABILIDAD', 'PARRY REFLEJA BALAS', 'BASE: +1 HP Y PSI', '3 NUCLEOS: OVERDRIVE', '[S] AUDIO | [C] CRT | [P] PAUSA'].forEach((t, i) => {
+      ['A/D O FLECHAS: MOVER', 'AMBOS BOTONES: SUBIR', 'ESP/ABAJO: HABILIDAD', 'PARRY REFLEJA BALAS', 'BASE: +1 HP Y PSI', 'RECOGE 3 ORBES AMARILLOS: ESTADO POTENCIADO', '[S] AUDIO | [C] CRT | [P] PAUSA'].forEach((t, i) => {
         drawText(t, W * 0.5, 70 + i * 13, [13, 11, 6, 10, 14, 9, 4][i], 1, 1);
       });
       addBtn(76, 184, W - 152, 24, PLAY_LBL, 19, startGame, 14);
