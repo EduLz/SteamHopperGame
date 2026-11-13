@@ -142,7 +142,7 @@
   }));
 
   // SOLO indice 0 realiza PARRY (28px)! Las demas habilidades ofrecen combate/control/escudo orbital.
-  const SKILLS = tbl('ESCUDO PARRY|BASE|22|86|UNICA CON PARRY 28PX + REFLEJA X2;CANON TRIPLE|BASE|24|70|3 RAYOS PERFORANTES (SIN PARRY);ORBES ESCOLTA|NV.1|22|220|2 ORBES BORRAN BALAS Y ATACAN 3.5S;TORMENTA EMP|NV.2|26|105|BORRA BALAS + RAYOS AL JEFE/ENEMIGOS', (a) => ({
+  const SKILLS = tbl('ESCUDO PARRY|BASE|22|86|UNICA CON PARRY 28PX + REFLEJA X2;CANON TRIPLE|BASE|24|70|3 RAYOS PERFORANTES (SIN PARRY);ORBES ESCOLTA|NV.1|22|220|2 ORBES BORRAN BALAS Y ATACAN 3.5S;TORMENTA EMP|NV.2|32|210|BORRA BALAS + RAYOS AL JEFE/ENEMIGOS', (a) => ({
     // _a:name _b:req _c:cost _l:cd _t:desc
     _a: a[0], _b: a[1], _c: +a[2], _l: +a[3], _t: a[4]
   }));
@@ -223,11 +223,13 @@
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
   }
 
+  const adjVol = (v) => (gameState === 1 ? v * 0.8 : v);
   const ramp = (p, a, b, t0, t1, l) => (p.setValueAtTime(a, t0), l ? p.linearRampToValueAtTime(b, t1) : p.exponentialRampToValueAtTime(b, t1));
   const playN = (n, g, b, t, d) => (g.connect((b && bgmFilter) || audioCtx.destination), n.start(t), n.stop(t + d + 0.01));
 
   function toneAt(f0, f1, dur, time, type, vol, toBgm) {
     if (!audioCtx) return;
+    vol = adjVol(vol);
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
     o.type = WVS[type];
@@ -249,6 +251,7 @@
 
   function noiseBurst(ftype, freq, q, time, dur, vol, toBgm) {
     if (!audioCtx || !noiseBuf) return;
+    vol = adjVol(vol);
     const src = audioCtx.createBufferSource();
     src.buffer = noiseBuf;
     const flt = audioCtx.createBiquadFilter();
@@ -898,7 +901,7 @@
       };
       if (phase === 2 && boss.active) {
         zap(boss.x, boss.y);
-        damageBoss(2, 2);
+        damageBoss(1.3, 2);
       }
 
       for (let c = 0; c < activeChunks.length; c++) {
@@ -907,13 +910,14 @@
           for (let i = arr.length - 1; i >= 0; i--) {
             const it = arr[i];
             const d = hy(it._x - drone.x, it._y - drone.y);
-            if (k > 1) {
-              if (d <= 102) it._stun = 180;
-            } else if (d <= 96 || (zaps < 3 && d <= 165)) {
+            if (k > 1) d <= 102 && (it._stun = 180);
+            else if (d <= 96 || (zaps < 3 && d <= 165)) {
               zap(it._x, it._y);
               burst(it._x, it._y, 6, 2.1, 15, PAL[10], PAL[6]);
-              arr.splice(i, 1);
-              score += k ? 100 : 120;
+              if (k || (it._hp -= 1.3) <= 0) {
+                arr.splice(i, 1);
+                score += k ? 100 : 120;
+              } else it._stun = 90;
             }
           }
         });
@@ -1074,6 +1078,7 @@
 
   function updatePhysics(dt) {
     elapsedTime += dt / 60;
+    if (phase === 5) return;
     runSeconds += dt / 60;
     bannerTimer = mx(0, bannerTimer - dt);
     if (grazeTimer > 0) {
@@ -1110,7 +1115,6 @@
       if (phaseTimer <= 0) advanceAfterBoss();
       return;
     }
-    if (phase === 5) return;
 
     drone.invuln = mx(0, drone.invuln - dt);
     drone.shield = mx(0, drone.shield - dt);
@@ -1823,10 +1827,9 @@
     } else if (phase === 5) {
       drawPanel(24, 42, W - 48, 156, PAL[0], PAL[5]);
       drawText('MISION CUMPLIDA!', W * 0.5, 54, PAL[6], 2, 1, PAL[13]);
-      drawText('CIUDADELA CENIT DERROTADA', W * 0.5, 78, PAL[10], 1, 1);
-      drawText('PUNTUACION FINAL: ' + score, W * 0.5, 102, PAL[14], 1, 1);
-      drawText('TIEMPO: ' + fl(runSeconds) + ' SEGUNDOS', W * 0.5, 118, PAL[13], 1, 1);
-      drawText('TODOS LOS NIVELES COMPLETOS', W * 0.5, 136, PAL[11], 1, 1);
+      [['CIUDADELA CENIT DERROTADA', 78, 10], ['PUNTUACION FINAL: ' + score, 102, 14], ['TIEMPO: ' + fl(runSeconds) + ' SEGUNDOS', 118, 13], ['TODOS LOS NIVELES COMPLETOS', 136, 11]].forEach(([t, y, c]) =>
+        drawText(t, W * 0.5, y, PAL[c], 1, 1)
+      );
       addBtn(84, 158, W - 168, 22, 'VOLVER AL MENU [ESP]', PAL[2], goMenu, PAL[5]);
     }
 
@@ -1879,9 +1882,8 @@
     if (menuTab === 0) {
       drawDronePod(W * 0.5, 70 + sn(elapsedTime * 3) * 2, sn(elapsedTime * 2) * 0.08, HULLS[selectedHull], sn(elapsedTime) * 1.4, -0.8, 1, 1, 0, 0);
 
-      const mNames = ['HISTORIA (NV.1-4)', 'BOSS RUSH (4 JEFES)', 'TORRE INFINITA'];
       drawText('MODALIDAD [M]:', W * 0.5, 92, PAL[11], 1, 1);
-      addBtn(36, 103, W - 72, 17, '<  ' + mNames[gameMode] + '  >', PAL[1], () => cycleMode(1), PAL[10]);
+      addBtn(36, 103, W - 72, 17, '<  ' + ['HISTORIA (NV.1-4)', 'BOSS RUSH (4 JEFES)', 'TORRE INFINITA'][gameMode] + '  >', PAL[1], () => cycleMode(1), PAL[10]);
 
       if (gameMode === 0) {
         addBtn(36, 125, W - 72, 17, 'NIVEL [E]: ' + LEVELS[startLevel]._a, PAL[1], () => cycleStartLevel(1), PAL[5]);
@@ -1922,11 +1924,10 @@
       // Visor animado del vehiculo seleccionado/inspeccionado
       drawPanel(140, 58, 40, 65, PAL[0], uh ? ah._p[0] : PAL[8]);
       fR(146, 103, 28, 2, uh ? ah._p[2] : PAL[12]);
-      ctx.save();
-      ctx.translate(160, 82);
-      ctx.scale(1.25, 1.25);
-      drawDronePod(0, sn(elapsedTime * 3) * 1.6, sn(elapsedTime * 2) * 0.1, ah, sn(elapsedTime) * 1.4, -0.8, 1, 1, 0, inspectSkill === 2);
-      ctx.restore();
+      rot(160, 82, 0, () => {
+        ctx.scale(1.25, 1.25);
+        drawDronePod(0, sn(elapsedTime * 3) * 1.6, sn(elapsedTime * 2) * 0.1, ah, sn(elapsedTime) * 1.4, -0.8, 1, 1, 0, inspectSkill === 2);
+      });
       drawText(selectedHull === inspectHull ? 'LISTO' : uh ? 'USAR' : 'BLOQ', 160, 110, selectedHull === inspectHull ? PAL[14] : uh ? PAL[6] : PAL[8], 1, 1);
 
       // Tarjeta intuitiva con barras legibles + rasgo real y desbloqueo
@@ -1945,7 +1946,7 @@
     } else {
       drawPanel(24, 62, W - 48, 114, PAL[0], PAL[14]);
       ['A/D O FLECHAS: PROPULSORES', 'AMBOS BOTONES: SUBIR RECTO', 'ESPACIO / ABAJO: HABILIDAD', 'ESCUDO PARRY REFLEJA BALAS', 'BASES VERDES: +1 HP Y PSI', '3 NUCLEOS: OVERDRIVE', '[S] AUDIO | [C] CRT | [P] PAUSA'].forEach((t, i) => {
-        drawText(t, W * 0.5, 70 + i * 13, [PAL[13], PAL[11], PAL[6], PAL[10], PAL[14], PAL[9], PAL[4]][i], 1, 1);
+        drawText(t, W * 0.5, 70 + i * 13, PAL[[13, 11, 6, 10, 14, 9, 4][i]], 1, 1);
       });
       addBtn(76, 184, W - 152, 24, PLAY_LBL, '#166534', startGame, PAL[14]);
     }
