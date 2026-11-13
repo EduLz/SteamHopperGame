@@ -87,7 +87,7 @@ async function build() {
   const cw = wMatch ? wMatch[1] : '256';
   const ch = hMatch ? hMatch[1] : '240';
 
-  const htmlContent = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>Steam Hopper</title><link rel="icon" href="data:,"><style>*{box-sizing:border-box;margin:0;padding:0;user-select:none;-webkit-user-select:none}html,body{width:100%;height:100%;background:#060408;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none}#c{width:min(100vw,calc(100vh*${cw}/${ch}));height:min(100vh,calc(100vw*${ch}/${cw}));image-rendering:pixelated;image-rendering:crisp-edges;border:4px solid #3c2a21;box-shadow:0 0 0 2px #f59e0b44,0 0 40px rgba(255,119,34,.22)}</style></head><body><canvas id="c"></canvas><script>${minJs}</script></body></html>`;
+  const htmlContent = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><title>Steam Hopper</title><link rel="icon" href="data:,"><style>*{margin:0;user-select:none}html,body{width:100%;height:100%;background:#060408;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none}#c{width:min(100vw,calc(100vh*${cw}/${ch}));height:min(100vh,calc(100vw*${ch}/${cw}));image-rendering:pixelated;border:4px solid #3c2a21;box-shadow:0 0 0 2px #f59e0b44,0 0 40px rgba(255,119,34,.22)}</style></head><body><canvas id="c"></canvas><script>${minJs}</script></body></html>`;
 
   fs.writeFileSync(distHtmlPath, htmlContent, 'utf8');
   fs.writeFileSync(rootHtmlPath, htmlContent, 'utf8');

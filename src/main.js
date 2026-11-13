@@ -711,6 +711,7 @@
     grazeTimer = 0;
     runSeconds = 0;
     ngPlus = 0;
+    phaseTimer = 0;
     drone.cores = 0;
     drone.overdrive = 0;
     deathReason = 'CONSUMIDO POR EL MAGMA';
@@ -726,6 +727,7 @@
   // 7. TRANSICIONES DE JEFE, COMBATE Y HABILIDADES BALANCEADAS
   // =========================================================================
   function beginBossIntro(lvIdx) {
+    if (phase || boss.active) return;
     boss.type = lvIdx % 4;
     boss.active = true;
     boss.arenaY = camY;
@@ -921,6 +923,7 @@
 
   function triggerGameOver() {
     gameState = 2;
+    phaseTimer = 900;
     menuTab = 0;
     screenShake = 14;
     if (maxMeters > highScore) {
@@ -1217,6 +1220,7 @@
       updateBossCombat(dt);
       return;
     }
+    if (phase) return;
 
     const lv = LEVELS[currentLevel % 4];
     lavaY = mn(lavaY - lv._vy * (1 + ngPlus * 0.15) * dt, drone.y + H * 1.1);
@@ -1812,9 +1816,9 @@
       drawText('NIVEL COMPLETADO', W * 0.5, 60, PAL[5], 2, 1, PAL[6]);
       drawText(lv._a, W * 0.5, 82, PAL[10], 1, 1);
       drawDronePod(66, 122 + sn(elapsedTime * 8) * 3, 0, HULLS[selectedHull], 0, -1.2, 1, 1, 0, 0);
-      drawText('PUNTOS: ' + score, 184, 106, PAL[13], 1, 1);
-      drawText('SIGUIENTE NIVEL...', 184, 124, PAL[14], 1, 1);
-      drawText('CURA: +1 HP AL SUBIR', 184, 140, PAL[11], 1, 1);
+      [['PUNTOS: ' + score, 13], ['SIGUIENTE NIVEL...', 14], ['CURA: +1 HP AL SUBIR', 11]].forEach(([t, c], i) =>
+        drawText(t, 184, 106 + i * 17, PAL[c], 1, 1)
+      );
       drawText('[ESPACIO] CONTINUAR', W * 0.5, 168, PAL[4], 1, 1);
     } else if (phase === 5) {
       drawPanel(24, 42, W - 48, 156, PAL[0], PAL[5]);
@@ -1868,9 +1872,9 @@
 
     drawText('STEAM HOPPER', W * 0.5, 18, PAL[5], 2, 1, PAL[6]);
 
-    addBtn(26, 38, 84, 15, 'INICIO', menuTab === 0 ? PAL[3] : PAL[1], () => (menuTab = 0), menuTab === 0 ? PAL[6] : PAL[4]);
-    addBtn(118, 38, 84, 15, 'HANGAR [T]', menuTab === 1 ? '#0e7490' : PAL[1], () => (menuTab = 1), menuTab === 1 ? PAL[10] : PAL[4]);
-    addBtn(210, 38, 84, 15, 'GUIA [G]', menuTab === 2 ? '#166534' : PAL[1], () => (menuTab = 2), menuTab === 2 ? PAL[14] : PAL[4]);
+    [['INICIO', PAL[3], 6], ['HANGAR [T]', '#0e7490', 10], ['GUIA [G]', '#166534', 14]].forEach((t, i) =>
+      addBtn(26 + i * 92, 38, 84, 15, t[0], menuTab === i ? t[1] : PAL[1], () => (menuTab = i), menuTab === i ? PAL[t[2]] : PAL[4])
+    );
 
     if (menuTab === 0) {
       drawDronePod(W * 0.5, 70 + sn(elapsedTime * 3) * 2, sn(elapsedTime * 2) * 0.08, HULLS[selectedHull], sn(elapsedTime) * 1.4, -0.8, 1, 1, 0, 0);
@@ -1901,32 +1905,17 @@
       drawText('HABILIDAD [Q]', 186, 58, PAL[6], 1, 0);
 
       for (let i = 0; i < 4; i++) {
-        const h = HULLS[i];
-        const hOk = isHullUnlocked(i);
-        const hSel = selectedHull === i;
-        addBtn(
-          20, 68 + i * 14, 116, 13,
-          (hSel ? '>' : '') + (i + 1) + '.' + h._a + (hOk ? '' : '*'),
-          hSel ? '#0e7490' : inspectHull === i ? PAL[2] : PAL[1],
-          () => {
+        [
+          [20, (i + 1) + '.' + HULLS[i]._a, isHullUnlocked(i), selectedHull === i, inspectHull === i, '#0e7490', () => {
             inspectHull = i;
-            if (hOk) selectedHull = i;
-          },
-          hSel ? PAL[6] : hOk ? PAL[4] : PAL[12]
-        );
-
-        const s = SKILLS[i];
-        const sOk = isSkillUnlocked(i);
-        const sSel = selectedSkill === i;
-        addBtn(
-          184, 68 + i * 14, 116, 13,
-          (sSel ? '>' : '') + s._a + (sOk ? '' : '*'),
-          sSel ? PAL[3] : inspectSkill === i ? PAL[2] : PAL[1],
-          () => {
+            if (isHullUnlocked(i)) selectedHull = i;
+          }],
+          [184, SKILLS[i]._a, isSkillUnlocked(i), selectedSkill === i, inspectSkill === i, PAL[3], () => {
             inspectSkill = i;
-            if (sOk) selectedSkill = i;
-          },
-          sSel ? PAL[6] : sOk ? PAL[4] : PAL[12]
+            if (isSkillUnlocked(i)) selectedSkill = i;
+          }]
+        ].forEach(([x, nm, ok, sel, ins, cBg, fn]) =>
+          addBtn(x, 68 + i * 14, 116, 13, (sel ? '>' : '') + nm + (ok ? '' : '*'), sel ? cBg : ins ? PAL[2] : PAL[1], fn, sel ? PAL[6] : ok ? PAL[4] : PAL[12])
         );
       }
 
@@ -1965,19 +1954,26 @@
   function drawOverlayModal() {
     uiBtns = [];
     const isPause = gameState === 3;
+    const lockS = !isPause && phaseTimer > 0 ? M.ceil(phaseTimer / 60) : 0;
     drawPanel(28, 30, W - 56, H - 60, BG9, isPause ? PAL[10] : PAL[8]);
     drawText(isPause ? 'PAUSA' : 'FIN DE PARTIDA', W * 0.5, 42, isPause ? PAL[10] : PAL[9], 2, 1, PAL[13]);
     drawText(isPause ? LEVELS[currentLevel % 4]._a : deathReason, W * 0.5, 64, isPause ? PAL[6] : PAL[8], 1, 1);
 
-    drawText('ALTURA: ' + maxMeters + 'M | PUNTOS: ' + score, W * 0.5, 86, PAL[13], 1, 1);
-    drawText('RECORD: ' + highScore + 'M', W * 0.5, 102, PAL[5], 1, 1);
-    drawText('HABILIDAD: ' + SKILLS[selectedSkill]._a, W * 0.5, 118, PAL[11], 1, 1);
+    [['ALTURA: ' + maxMeters + 'M | PUNTOS: ' + score, 13], ['RECORD: ' + highScore + 'M', 5], ['HABILIDAD: ' + SKILLS[selectedSkill]._a, 11]].forEach(([t, c], i) =>
+      drawText(t, W * 0.5, 86 + i * 16, PAL[c], 1, 1)
+    );
 
-    addBtn(56, 138, W - 112, 22, isPause ? 'CONTINUAR [ESP]' : 'REINTENTAR [ESP]', PAL[3], () => {
-      if (isPause) gameState = 1;
-      else startGame();
-    }, PAL[6]);
-    addBtn(56, 166, W - 112, 20, 'MENU PRINCIPAL [M]', PAL[1], goMenu, PAL[10]);
+    if (lockS) {
+      drawPanel(56, 138, W - 112, 48, PAL[1], PAL[8]);
+      drawText('REVISA TU RESUMEN', W * 0.5, 148, PAL[11], 1, 1);
+      drawText('ESPERA ' + lockS + 'S', W * 0.5, 164, PAL[6], 1, 1);
+    } else {
+      addBtn(56, 138, W - 112, 22, isPause ? 'CONTINUAR [ESP]' : 'REINTENTAR [ESP]', PAL[3], () => {
+        if (isPause) gameState = 1;
+        else startGame();
+      }, PAL[6]);
+      addBtn(56, 166, W - 112, 20, 'MENU PRINCIPAL [M]', PAL[1], goMenu, PAL[10]);
+    }
   }
 
   function drawCRT() {
@@ -1997,21 +1993,31 @@
     keys[c] = true;
     initAudio();
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Tab', 'Enter'].includes(c)) e.preventDefault();
+    if (!first) return;
+    const isOk = c === 'Space' || c === 'Enter';
+    const isM = c === 'KeyM';
 
-    if (c === 'KeyS' && first && gameState !== 1) return void (soundMode = (soundMode + 1) % 3);
-    if (c === 'KeyC' && first) return void (crtEnabled = !crtEnabled);
-    if ((c === 'KeyP' || c === 'Escape') && first && (gameState === 1 || gameState === 3)) {
+    if (c === 'KeyS' && gameState !== 1) return void (soundMode = (soundMode + 1) % 3);
+    if (c === 'KeyC') return void (crtEnabled = !crtEnabled);
+    if ((c === 'KeyP' || c === 'Escape') && (gameState === 1 || gameState === 3)) {
       gameState = gameState === 1 ? 3 : 1;
       return;
     }
 
-    if (gameState !== 1 && first) {
+    if (gameState !== 1) {
+      if (gameState === 2 && phaseTimer > 0) return;
+      if (gameState >= 2) {
+        if (isM) goMenu();
+        else if (isOk) {
+          if (gameState === 3) gameState = 1;
+          else startGame();
+        }
+        return;
+      }
       if (c === 'KeyT' || c === 'Tab') menuTab = menuTab === 1 ? 0 : 1;
       else if (c === 'KeyG') menuTab = menuTab === 2 ? 0 : 2;
-      else if (c === 'KeyM') {
-        if (gameState === 0) cycleMode(1);
-        else goMenu();
-      } else if (c === 'KeyE') cycleStartLevel(1);
+      else if (isM) cycleMode(1);
+      else if (c === 'KeyE') cycleStartLevel(1);
       else if (c === 'KeyF') editSeed();
       else if (c === 'KeyR') toggleRnd();
       else if (c === 'KeyQ') {
@@ -2029,20 +2035,15 @@
           inspectHull = d;
           if (isHullUnlocked(d)) selectedHull = d;
         }
-      } else if (c === 'Space' || c === 'Enter') {
-        if (gameState === 3) gameState = 1;
-        else startGame();
-      }
+      } else if (isOk) startGame();
       return;
     }
 
-    if (gameState === 1 && first) {
-      if (c === 'KeyM') soundMode = (soundMode + 1) % 3;
-      else if (c === 'Space' || c === 'ArrowDown' || c === 'Enter') {
-        if (phase === 4 && phaseTimer < 120) advanceAfterBoss();
-        else if (phase === 5) goMenu();
-        else triggerActiveSkill();
-      }
+    if (isM) soundMode = (soundMode + 1) % 3;
+    else if (isOk || c === 'ArrowDown') {
+      if (phase === 4 && phaseTimer < 120) advanceAfterBoss();
+      else if (phase === 5) goMenu();
+      else triggerActiveSkill();
     }
   });
 
@@ -2098,6 +2099,7 @@
     } else {
       elapsedTime += dt / 60;
       if (gameState === 0) updateBGM();
+      if (gameState === 2) phaseTimer = mx(0, phaseTimer - dt);
       if (gameState !== 3) updateParticles(dt);
     }
 
