@@ -55,3 +55,4 @@ Si realizas cambios en `src/main.js` y quieres regenerar `index.html`:
 npm install
 npm run build
 ```
+
