@@ -20,7 +20,6 @@
   const MAX_VY_DOWN = 3.35;
   const RESTITUTION = 0.45;
   const PARRY_RADIUS = 28;
-  const POOL_SIZE = 72;
   const M = Math;
   const PI2 = M.PI * 2;
   const ab = M.abs;
@@ -48,18 +47,17 @@
     ctx.lineWidth = lw || 1;
     ctx.strokeRect(x | 0, y | 0, w | 0, h | 0);
   };
-  const fArc = (x, y, r, c) => {
-    ctx.fillStyle = c;
+  const fArc = (x, y, r, c, w) => {
     ctx.beginPath();
     ctx.arc(x, y, r, 0, PI2);
-    ctx.fill();
-  };
-  const cArc = (x, y, r, c, w) => {
-    ctx.strokeStyle = c;
-    ctx.lineWidth = w || 1.5;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, PI2);
-    ctx.stroke();
+    if (w) {
+      ctx.strokeStyle = c;
+      ctx.lineWidth = w;
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = c;
+      ctx.fill();
+    }
   };
   const rot = (x, y, a, fn) => {
     ctx.save();
@@ -70,9 +68,9 @@
   };
   const hsl = (h, s, l) => 'hsl(' + h + ',' + s + '%,' + l + '%)';
 
-  // Paleta base estilo v6 (#06090f cobre/acero/cian/fuego)
-  const PAL = '#06090f|#161920|#3b251e|#7a4832|#c87d3b|#fbbf24|#fde047|#8c1d18|#ef4444|#ff7722|#38bdf8|#bae6fd|#94a3b8|#f8fafc|#4ade80|#c084fc'.split('|');
-  // 0:BG 1:DARK 2:PIPE 3:RUST 4:COPPER 5:GOLD 6:YG 7:CRIMSON 8:RED 9:ORANGE 10:CYAN 11:ICE 12:STEEL 13:WHITE 14:GREEN 15:PURPLE
+  // Paleta base estilo v6 + tonos oscuros compartidos (16..20)
+  const PAL = '#06090f|#161920|#3b251e|#7a4832|#c87d3b|#fbbf24|#fde047|#8c1d18|#ef4444|#ff7722|#38bdf8|#bae6fd|#94a3b8|#f8fafc|#4ade80|#c084fc|#064e3b|#1e3a8a|#0e7490|#166534|#4c1d95'.split('|');
+  // 0:BG 1:DARK 2:PIPE 3:RUST 4:COPPER 5:GOLD 6:YG 7:CRIMSON 8:RED 9:ORANGE 10:CYAN 11:ICE 12:STEEL 13:WHITE 14:GREEN 15:PURPLE 16:TEALDK 17:NAVY 18:CYAN2 19:GRNDK 20:PURPDK
 
   // =========================================================================
   // 2. FUENTE BITMAP 5x7 BASE-32 NITIDA Y CONTENEDORES V6
@@ -136,9 +134,9 @@
   // 3. DATOS DE VEHICULOS, HABILIDADES Y 4 BIOMAS/NIVELES ARTESANALES (HSL V6)
   // =========================================================================
   const tbl = (s, fn) => s.split(';').map((r) => fn(r.split('|')));
-  const HULLS = tbl('MK.I BRONCE|BASE|5|1|1|1|8|BALANCEADO Y VERSATIL|#c87d3b|#7a4832|#fbbf24;MK.II FORJA|NV.1 O 100M|6|.95|1.05|.9|8|TANQUE +1 VIDA MAX, -10% PSI|#ef4444|#7a4832|#fde047;MK.III VOLTA|NV.2 O 220M|5|1.16|1.12|.95|10|TURBO +16% MOTOR Y SUBIDA|#38bdf8|#1e3a8a|#fde047;MK.IV ESPECTRO|NV.3 O 360M|5|1.12|1.1|.8|14|ECO -20% PSI, +75% GRAZE|#c084fc|#4c1d95|#38bdf8', (a) => ({
+  const HULLS = tbl('MK.I BRONCE|BASE|5|1|1|1|8|BALANCEADO Y VERSATIL|4|3|5;MK.II FORJA|NV.1 O 100M|6|.95|1.05|.9|8|TANQUE +1 VIDA MAX, -10% PSI|8|3|6;MK.III VOLTA|NV.2 O 220M|5|1.16|1.12|.95|10|TURBO +16% MOTOR Y SUBIDA|10|17|6;MK.IV ESPECTRO|NV.3 O 360M|5|1.12|1.1|.8|14|ECO -20% PSI, +75% GRAZE|15|20|10', (a) => ({
     // _a:name _b:req _t:hp _x:tx _y:ty _s:psi _g:grz _l:trait _p:[c1,c2,c3]
-    _a: a[0], _b: a[1], _t: +a[2], _x: +a[3], _y: +a[4], _s: +a[5], _g: +a[6], _l: a[7], _p: [a[8], a[9], a[10]]
+    _a: a[0], _b: a[1], _t: +a[2], _x: +a[3], _y: +a[4], _s: +a[5], _g: +a[6], _l: a[7], _p: [PAL[a[8]], PAL[a[9]], PAL[a[10]]]
   }));
 
   // SOLO indice 0 realiza PARRY (28px)! Las demas habilidades ofrecen combate/control/escudo orbital.
@@ -338,15 +336,19 @@
   // =========================================================================
   // 5. ESTADO DEL JUEGO, SINGLETONS Y PERSISTENCIA
   // =========================================================================
-  const stGet = (k) => { try { return parseInt(localStorage.getItem(k) || '0', 10) || 0; } catch (_) { return 0; } };
-  let highScore = stGet('sh7_hi');
-  let maxLevelReached = stGet('sh7_lv');
-  function saveProg() {
+  const ls = (k, v) => {
     try {
-      localStorage.setItem('sh7_hi', highScore);
-      localStorage.setItem('sh7_lv', maxLevelReached);
-    } catch (_) {}
-  }
+      return v == null ? +localStorage.getItem(k) || 0 : localStorage.setItem(k, v);
+    } catch (_) {
+      return 0;
+    }
+  };
+  let highScore = ls('sh7_hi');
+  let maxLevelReached = ls('sh7_lv');
+  const saveProg = () => {
+    ls('sh7_hi', highScore);
+    ls('sh7_lv', maxLevelReached);
+  };
 
   // Importante para build.js flattenSingletons: mantener sin {} anidados ni comas en expresiones!
   const drone = {
@@ -397,11 +399,7 @@
   let empBolts = [];
   let activeChunks = [];
 
-  const particles = [];
-  let poolIdx = 0;
-  for (let i = 0; i < POOL_SIZE; i++) {
-    particles.push({ _on: 0, _t: 0, _x: 0, _y: 0, _vx: 0, _vy: 0, _l: 0, _s: 2, _c: PAL[3] });
-  }
+  let particles = [];
 
   let gameState = 0; // 0: Menu, 1: Jugando, 2: GameOver, 3: Pausa
   let menuTab = 0; // 0: Principal, 1: Hangar, 2: Guia
@@ -461,7 +459,7 @@
     randomSeed = false;
     let entered = null;
     try {
-      if (typeof window.prompt === 'function') entered = window.prompt('Semilla numerica para Torre Infinita:', String(seed));
+      if (typeof window.prompt === 'function') entered = window.prompt('Semilla Torre:', String(seed));
     } catch (_) {}
     if (entered !== null && /^\d+$/.test(entered.trim())) seed = parseInt(entered.trim(), 10) % 1000000 || 1;
     else seed = (seed + 137) % 999999 || 1;
@@ -475,17 +473,8 @@
   }
 
   function spawnParticle(t, x, y, vx, vy, life, sz, col) {
-    const p = particles[poolIdx];
-    poolIdx = (poolIdx + 1) & (POOL_SIZE - 1);
-    p._on = 1;
-    p._t = t;
-    p._x = x;
-    p._y = y;
-    p._vx = vx;
-    p._vy = vy;
-    p._l = life;
-    p._s = sz || 2;
-    p._c = col || PAL[13];
+    if (particles.length >= 72) particles.shift();
+    particles.push({ _t: t, _x: x, _y: y, _vx: vx, _vy: vy, _l: life, _s: sz || 2, _c: col || PAL[13] });
   }
 
   function burst(x, y, n, sp, l, c1, c2) {
@@ -648,33 +637,20 @@
 
     drone.x = W * 0.5;
     drone.y = 184;
-    drone.vx = 0;
-    drone.vy = 0;
-    drone.theta = 0;
     drone.maxHp = hull._t;
     drone.hp = preserveHp ? mn(drone.maxHp, drone.hp + 1) : hull._t;
     drone.invuln = 30;
-    drone.pressure = 100;
-    drone.maxPsi = 100;
-    drone.purge = 0;
-    drone.slamCd = 0;
-    drone.empR = 0;
-    drone.parryRing = 0;
-    drone.shield = 0;
-    drone.orbsT = 0;
+    drone.pressure = drone.maxPsi = 100;
+    drone.vx = drone.vy = drone.theta = drone.purge = drone.slamCd = drone.empR = drone.parryRing = drone.shield = drone.orbsT = camY = warnAlertLevel = seqStep = barCount = 0;
 
-    camY = 0;
     lavaY = H + 75;
-    warnAlertLevel = 0;
     boss.active = false;
     bossShots = [];
     playerShots = [];
     empBolts = [];
-    seqStep = 0;
-    barCount = 0;
     if (audioCtx) nextNoteTime = audioCtx.currentTime + 0.05;
 
-    for (let i = 0; i < POOL_SIZE; i++) particles[i]._on = 0;
+    particles = [];
     activeChunks = [];
 
     if (gameMode === 1) {
@@ -701,7 +677,7 @@
       for (let i = 0; i <= 2; i++) activeChunks.push(createChunk(i, 0, false));
       nextBossMeters = 120;
       phase = 0;
-      showBanner('TORRE INFINITA - SEMILLA ' + seed, PAL[10], 120);
+      showBanner('TORRE SEMILLA ' + seed, PAL[10], 120);
     }
   }
 
@@ -717,11 +693,10 @@
     phaseTimer = 0;
     drone.cores = 0;
     drone.overdrive = 0;
-    deathReason = 'CONSUMIDO POR EL MAGMA';
+    deathReason = 'CAIDO EN MAGMA';
 
     loadLevelWorld(gameMode === 0 ? startLevel : 0, false);
-    keys['Space'] = false;
-    keys['Enter'] = false;
+    keys['Space'] = keys['Enter'] = false;
     gameState = 1;
     playJingle(3);
   }
@@ -781,12 +756,12 @@
     if (boss.shield > 0) {
       if (!mode && drone.overdrive <= 0) {
         sfxTone(220, 150, 0.08, 1, 0.09);
-        if (bannerTimer <= 0) showBanner('ESCUDO! USA PARRY O EMP', PAL[11], 75);
+        if (bannerTimer <= 0) showBanner('ESCUDO! USA PARRY/EMP', PAL[11], 75);
         boss.invuln = 14;
         return;
       }
       boss.shield = 0;
-      showBanner(mode === 2 ? 'ESCUDO ROTO POR EMP!' : 'ESCUDO ROTO POR PARRY!', PAL[10], 90);
+      showBanner('ROTO POR ' + (mode === 2 ? 'EMP!' : 'PARRY!'), PAL[10], 90);
     }
 
     boss.hp = mx(0, boss.hp - dmg);
@@ -859,7 +834,7 @@
         drone.shield = 28;
         screenShake = 8;
         score += 200 * reflected;
-        showBanner('PARRY PERFECTO X' + reflected + '!', PAL[10], 75);
+        showBanner('PARRY X' + reflected + '!', PAL[10], 75);
         sfxTone(620, 1280, 0.14, 0, 0.13);
         burst(drone.x, drone.y, 12, 2.6, 18, PAL[10]);
       }
@@ -995,44 +970,32 @@
 
     const pt = boss.type;
     const rad = (yo, a, sp, r, g, b) => pushShot(boss.x, boss.y + yo, cs(a) * sp * enr, sn(a) * sp * enr, r, g, b);
-    if (pt === 0) {
-      boss.x = W * 0.5 + sn(elapsedTime * 1.55 * enr) * 76;
-      boss.y = boss.baseY + sn(elapsedTime * 3.1) * 10;
-      if (boss.phaseTimer > 64 / enr) {
-        boss.phaseTimer = 0;
-        const ang = M.atan2(drone.y - boss.y, drone.x - boss.x);
-        for (let k = -1; k <= 1; k++) rad(8, ang + k * 0.26, 1.6);
-        sfxTone(420, 150, 0.1, 0, 0.08);
-      }
-    } else if (pt === 1) {
+    if (pt === 1) {
       boss.x += boss.vx * enr * dt;
       if (boss.x < WALL_L + 30 || boss.x > WALL_R - 30) boss.vx = -boss.vx;
       boss.y = boss.baseY - ab(sn(elapsedTime * 2.8)) * 18;
-      if (boss.phaseTimer > 54 / enr) {
-        boss.phaseTimer = 0;
-        pushShot(boss.x, boss.y + 8, 1.55 * enr, 0.75, 4, 0.025, 1);
-        pushShot(boss.x, boss.y + 8, -1.55 * enr, 0.75, 4, 0.025, 1);
-        sfxTone(540, 260, 0.1, 1, 0.08);
-      }
-    } else if (pt === 2) {
-      boss.x = W * 0.5 + sn(elapsedTime * 1.3 * enr) * 62;
-      boss.y = boss.baseY + cs(elapsedTime * 2.2) * 12;
-      if (boss.phaseTimer > 56 / enr) {
-        boss.phaseTimer = 0;
+    } else {
+      const m = [[1.55, 76, 3.1, 10], 0, [1.3, 62, 2.2, 12], [1.9, 86, 3.8, 14]][pt];
+      boss.x = W * 0.5 + sn(elapsedTime * m[0] * enr) * m[1];
+      boss.y = boss.baseY + (pt === 2 ? cs : sn)(elapsedTime * m[2]) * m[3];
+    }
+
+    if (boss.phaseTimer > [64, 54, 56, 52][pt] / enr) {
+      boss.phaseTimer = 0;
+      const ang = M.atan2(drone.y - boss.y, drone.x - boss.x);
+      if (pt === 0) {
+        for (let k = -1; k <= 1; k++) rad(8, ang + k * 0.26, 1.6);
+      } else if (pt === 1) {
+        [1, -1].forEach((s) => pushShot(boss.x, boss.y + 8, s * 1.55 * enr, 0.75, 4, 0.025, 1));
+      } else if (pt === 2) {
         const nShots = boss.hp <= boss.maxHp >> 1 ? 8 : 6;
         for (let k = 0; k < nShots; k++) rad(0, elapsedTime * 2.1 + (k * PI2) / nShots, 1.48);
-        sfxTone(760, 320, 0.12, 3, 0.08);
-      }
-    } else {
-      boss.x = W * 0.5 + sn(elapsedTime * 1.9 * enr) * 86;
-      boss.y = boss.baseY + sn(elapsedTime * 3.8) * 14;
-      if (boss.phaseTimer > 52 / enr) {
-        boss.phaseTimer = 0;
-        const ang = M.atan2(drone.y - boss.y, drone.x - boss.x);
+      } else {
         rad(0, ang, 2.1, 5);
         for (let k = 0; k < 4; k++) rad(0, ang + 0.4 + (k * PI2) / 4, 1.4, 4, 0, 1);
-        sfxTone(880, 240, 0.13, 2, 0.09);
       }
+      const sx = [[420, 150, 0.1, 0, 0.08], [540, 260, 0.1, 1, 0.08], [760, 320, 0.12, 3, 0.08], [880, 240, 0.13, 2, 0.09]][pt];
+      sfxTone(sx[0], sx[1], sx[2], sx[3], sx[4]);
     }
 
     if (boss.invuln <= 0 && hitByOrbs(boss.x, boss.y, boss.r + 7)) damageBoss(1, 0);
@@ -1046,12 +1009,12 @@
       drone.vx = nx * 1.8;
       drone.vy = ny * 1.8;
       if (drone.overdrive > 0) damageBoss(1, 0);
-      else applyDamage(30, 1, 'APLASTADO POR ' + LEVELS[currentLevel % 4]._b);
+      else applyDamage(30, 1, 'POR ' + LEVELS[currentLevel % 4]._b);
     } else if (db <= drone.r + boss.r + 6) {
       triggerGraze(boss.x, boss.y);
     }
 
-    stepBossShots(dt, 50, 'ABATIDO EN COMBATE');
+    stepBossShots(dt, 50, 'POR COMBATE');
   }
 
   function advanceAfterBoss() {
@@ -1064,7 +1027,7 @@
       if (activeChunks.length > 0) {
         activeChunks[activeChunks.length - 1]._plats.push({ _x1: mx(WALL_L + 10, drone.x - 45), _y1: drone.y + 14, _x2: mn(WALL_R - 10, drone.x + 45), _y2: drone.y + 23, _w: 90, _cool: 1, _vx: 0 });
       }
-      showBanner('ZONA SIGUIENTE! +1 HP', PAL[14], 110);
+      showBanner('SIGUIENTE! +1 HP', PAL[14], 110);
       return;
     }
     if (currentLevel < 3) loadLevelWorld(currentLevel + 1, true);
@@ -1229,7 +1192,7 @@
     const lv = LEVELS[currentLevel % 4];
     lavaY = mn(lavaY - lv._vy * (1 + ngPlus * 0.15) * dt, drone.y + H * 1.1);
     if (drone.y + drone.r >= lavaY) {
-      deathReason = 'CONSUMIDO POR EL MAGMA';
+      deathReason = 'CAIDO EN MAGMA';
       triggerGameOver();
       return;
     }
@@ -1264,7 +1227,7 @@
             rs._on = 1;
             if (drone.hp < drone.maxHp) drone.hp++;
             score += 250;
-            showBanner('ESTACION: +1 HP Y PSI', PAL[14], 110);
+            showBanner('BASE: +1 HP Y PSI', PAL[14], 110);
             playJingle(0);
             burst(rs._x, rs._y, 10, 1.6, 20, PAL[14]);
           }
@@ -1280,7 +1243,7 @@
           if (drone.cores >= 3) {
             drone.cores = 0;
             drone.overdrive = 220;
-            showBanner('!OVERDRIVE ACTIVADO!', PAL[6], 100);
+            showBanner('OVERDRIVE!', PAL[6], 100);
             sfxTone(440, 1100, 0.25, 0, 0.12);
           } else sfxTone(660, 990, 0.08, 1, 0.09);
         }
@@ -1294,7 +1257,7 @@
         }
         const cyc = cycOf(gt);
         if (cyc >= 102 && cyc < 138 && ab(drone.y - gt._y) < drone.r + 3 && drone.x > gt._x && drone.x < gt._x + gt._w) {
-          applyDamage(30, 1, 'CORTADO POR COMPUERTA');
+          applyDamage(30, 1, 'POR COMPUERTA');
         }
       }
 
@@ -1309,7 +1272,7 @@
           const dist = (drone.x - vt._x) * vt._dir;
           if (dist > 0 && dist < 56) {
             drone.vx += vt._dir * 0.22 * dt;
-            if (dist < 28) applyDamage(26, 1, 'QUEMADO POR VALVULA');
+            if (dist < 28) applyDamage(26, 1, 'POR VALVULA');
             else triggerGraze(vt._x + vt._dir * 20, vt._y);
           }
         }
@@ -1352,7 +1315,7 @@
         }
 
         const df = hy(drone.x - e._x, drone.y - e._y);
-        if (df < drone.r + 6) applyDamage(26, 1, 'INTERCEPTADO POR CENTINELA');
+        if (df < drone.r + 6) applyDamage(26, 1, 'POR CENTINELA');
         else if (df < drone.r + 12) triggerGraze(e._x, e._y);
       }
 
@@ -1377,12 +1340,12 @@
         if (ds <= drone.r + g._r) {
           drone.vx = ((drone.x - g._x) / ds) * 1.6;
           drone.vy = ((drone.y - g._y) / ds) * 1.6;
-          applyDamage(28, 1, 'DESTRUIDO POR SIERRA');
+          applyDamage(28, 1, 'POR SIERRA');
         } else if (ds <= drone.r + g._r + 6) triggerGraze(g._x, g._y);
       }
     }
 
-    stepBossShots(dt, 30, 'ALCANZADO POR PROYECTIL');
+    stepBossShots(dt, 30, 'POR PROYECTIL');
 
     const targetCamY = drone.y - H * 0.56;
     if (targetCamY < camY) camY += (targetCamY - camY) * (1 - M.pow(0.85, dt));
@@ -1414,14 +1377,12 @@
   }
 
   function updateParticles(dt) {
-    for (let i = 0; i < POOL_SIZE; i++) {
+    for (let i = particles.length - 1; i >= 0; i--) {
       const p = particles[i];
-      if (!p._on) continue;
       p._x += p._vx * dt;
       p._y += p._vy * dt;
       if (p._t === 1) p._vy += 0.04 * dt;
-      p._l -= dt;
-      if (p._l <= 0) p._on = 0;
+      if ((p._l -= dt) <= 0) particles.splice(i, 1);
     }
   }
 
@@ -1484,15 +1445,12 @@
 
       const hi = HULLS.indexOf(hull);
       if (hi === 1) {
-        fR(-9, -4, 3, 6, hull._p[0]);
-        fR(6, -4, 3, 6, hull._p[0]);
+        [-9, 6].forEach((x) => fR(x, -4, 3, 6, hull._p[0]));
       } else if (hi === 2) {
-        fR(-10, -2, 4, 3, PAL[10]);
-        fR(6, -2, 4, 3, PAL[10]);
+        [-10, 6].forEach((x) => fR(x, -2, 4, 3, PAL[10]));
         fR(-1, -10, 2, 4, hull._p[2]);
       } else if (hi === 3) {
-        fArc(cs(elapsedTime * 5) * 9, sn(elapsedTime * 5) * 6, 2, PAL[10]);
-        fArc(-cs(elapsedTime * 5) * 9, -sn(elapsedTime * 5) * 6, 2, PAL[15]);
+        [1, -1].forEach((s, k) => fArc(s * cs(elapsedTime * 5) * 9, s * sn(elapsedTime * 5) * 6, 2, PAL[k ? 15 : 10]));
       }
 
       fArc(0, 0, 7, hull._p[1]);
@@ -1511,21 +1469,18 @@
     if (boss.invuln > 0 && (((boss.invuln * 0.6) | 0) & 1)) return;
 
     rot(bx, by, [elapsedTime * 1.6, -elapsedTime * 2.4, elapsedTime * 1.3, elapsedTime * 1.9][boss.type], () => {
+      const b = [[16, 18, 13, PAL[3], 9], [14, 18, 12, '#1e1b4b', 10], [12, 17, 13, PAL[16], 14], [18, 19, 14, '#3b0764', 6]][boss.type];
+      drawToothed(b[0], b[1], b[2], b[3], PAL[b[4]]);
       if (boss.type === 0) {
-        drawToothed(16, 18, 13, PAL[3], PAL[9]);
         drawToothed(10, 12, 8, PAL[7], PAL[5]);
       } else if (boss.type === 1) {
-        drawToothed(14, 18, 12, '#1e1b4b', PAL[10]);
-        fR(-21, -3, 5, 6, PAL[15]);
-        fR(16, -3, 5, 6, PAL[15]);
+        [-21, 16].forEach((x) => fR(x, -3, 5, 6, PAL[15]));
       } else if (boss.type === 2) {
-        drawToothed(12, 17, 13, '#064e3b', PAL[14]);
         for (let k = 0; k < 3; k++) {
           const a = elapsedTime * 1.7 + (k * PI2) / 3;
           fArc(cs(a) * 19, sn(a) * 19, 3.5, PAL[14]);
         }
       } else {
-        drawToothed(18, 19, 14, '#3b0764', PAL[6]);
         ctx.rotate(-elapsedTime * 3.8);
         drawToothed(8, 13, 8, PAL[15], PAL[13]);
       }
@@ -1533,28 +1488,21 @@
       fArc(0, 0, 4.5 + sn(elapsedTime * 8), lv._p[10]);
     });
 
-    if (boss.shield > 0) cArc(bx, by, boss.r + 5, PAL[10], 2);
+    if (boss.shield > 0) fArc(bx, by, boss.r + 5, PAL[10], 2);
   }
 
   function drawEnemyActor(e, cy) {
     rot(e._x, e._y - cy, [elapsedTime * 3, 0, -elapsedTime * 2, sn(elapsedTime * 4) * 0.25][e._t], () => {
-      if (e._t === 0) {
-        drawToothed(8, 8, 5.5, PAL[7], PAL[9]);
-        fArc(0, 0, 3, PAL[6]);
-      } else if (e._t === 1) {
-        fR(-7, -3, 14, 6, '#1e3a8a');
-        fArc(-7, 0, 3, PAL[10]);
-        fArc(7, 0, 3, PAL[10]);
-        fArc(0, 0, 4, PAL[6]);
-      } else if (e._t === 2) {
-        drawToothed(6, 8, 6, '#064e3b', PAL[14]);
-        fArc(0, 0, 3.2, PAL[11]);
+      if (e._t === 1) {
+        fR(-7, -3, 14, 6, PAL[17]);
+        [-7, 7].forEach((x) => fArc(x, 0, 3, PAL[10]));
       } else {
-        fR(-9, -2, 18, 4, '#581c87');
-        drawToothed(8, 7, 4, PAL[4], PAL[6]);
-        fArc(0, 0, 2.5, PAL[8]);
+        if (e._t === 3) fR(-9, -2, 18, 4, '#581c87');
+        const g = [[8, 8, 5.5, 7, 9], 0, [6, 8, 6, 16, 14], [8, 7, 4, 4, 6]][e._t];
+        drawToothed(g[0], g[1], g[2], PAL[g[3]], PAL[g[4]]);
       }
-      if (e._stun > 0) cArc(0, 0, 10, PAL[10], 1.5);
+      fArc(0, 0, [3, 4, 3.2, 2.5][e._t], PAL[[6, 6, 11, 8][e._t]]);
+      if (e._stun > 0) fArc(0, 0, 10, PAL[10], 1.5);
     });
   }
 
@@ -1568,14 +1516,14 @@
         const my = (200 - mMark * 12 - cy) | 0;
         if (my > -10 && my < H + 10) {
           for (let x = WALL_L; x < WALL_R; x += 14) fR(x, my, 7, 1, lv._p[3]);
-          drawText('COTAS ' + mMark + 'M', WALL_L + 6, my - 8, lv._p[3], 1, 0);
+          drawText('COTA ' + mMark + 'M', WALL_L + 6, my - 8, lv._p[3], 1, 0);
         }
       }
       if (gameMode === 0) {
         const gy = (levelGoalY - cy) | 0;
         if (gy > -20 && gy < H + 20) {
           for (let x = WALL_L; x < WALL_R; x += 12) fR(x, gy, 7, 2, ((elapsedTime * 10) | 0) & 1 ? PAL[8] : PAL[6]);
-          drawText('COMPUERTA DEL JEFE', W * 0.5, gy - 10, PAL[6], 1, 1);
+          drawText('COMPUERTA JEFE', W * 0.5, gy - 10, PAL[6], 1, 1);
         }
       }
 
@@ -1592,10 +1540,10 @@
           const ph = (p._y2 - p._y1) | 0;
 
           if (p._rest) {
-            fR(sx, sy, pw, ph, '#064e3b');
+            fR(sx, sy, pw, ph, PAL[16]);
             fR(sx, sy, pw, 2, PAL[14]);
             for (let k = 6; k < pw - 6; k += 14) fR(sx + k, sy + 4, 4, 2, PAL[13]);
-            drawText('ESTACION DESCANSO', sx + pw * 0.5, sy - 26, PAL[14], 1, 1);
+            drawText('BASE DESCANSO', sx + pw * 0.5, sy - 26, PAL[14], 1, 1);
           } else if (p._bar) {
             fR(sx, sy, pw, ph, lv._p[2]);
             fR(sx, sy, pw, 2, lv._p[3]);
@@ -1614,7 +1562,7 @@
         for (let i = 0; i < ch._rests.length; i++) {
           const rs = ch._rests[i];
           const ry = rs._y - cy;
-          rot(rs._x, ry, rs._on ? 0 : elapsedTime * 2, () => drawToothed(8, 10, 8, rs._on ? PAL[1] : '#064e3b', rs._on ? PAL[12] : PAL[14]));
+          rot(rs._x, ry, rs._on ? 0 : elapsedTime * 2, () => drawToothed(8, 10, 8, rs._on ? PAL[1] : PAL[16], rs._on ? PAL[12] : PAL[14]));
           fArc(rs._x, ry, 4, rs._on ? PAL[12] : PAL[10]);
           if (!rs._on) {
             fR(rs._x - 3, ry - 1, 6, 2, PAL[13]);
@@ -1715,24 +1663,24 @@
     const dy = drone.y - cy;
 
     if (drone.parryRing > 0 || drone.empR > 0 || drone.shield > 0 || drone.overdrive > 0) {
-      cArc(
+      fArc(
         dx, dy,
         drone.parryRing > 0 ? PARRY_RADIUS : drone.empR > 0 ? drone.empR : 11,
         drone.overdrive > 0 ? PAL[6] : PAL[10],
         drone.parryRing > 0 || drone.empR > 0 ? 2 : 1.5
       );
-      if (drone.empR > 12) cArc(dx, dy, drone.empR * 0.68, PAL[6], 1.5);
+      if (drone.empR > 12) fArc(dx, dy, drone.empR * 0.68, PAL[6], 1.5);
     }
 
     if (drone.orbsT > 0 && (drone.orbsT > 35 || ((drone.orbsT * 0.5) | 0) & 1)) {
-      cArc(dx, dy, 24, 'rgba(56,189,248,0.28)', 1);
+      fArc(dx, dy, 24, 'rgba(56,189,248,0.28)', 1);
       for (let k = 0; k < 2; k++) {
         const a = elapsedTime * 5.4 + k * M.PI;
         const ox = dx + cs(a) * 24;
         const oy = dy + sn(a) * 24;
         fArc(ox, oy, 4.5, PAL[10]);
         fArc(ox, oy, 2, PAL[13]);
-        cArc(ox, oy, 6, PAL[6], 1);
+        fArc(ox, oy, 6, PAL[6], 1);
       }
     }
 
@@ -1757,9 +1705,9 @@
   }
 
   function drawParticles(cy) {
-    for (let i = 0; i < POOL_SIZE; i++) {
+    for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
-      if (p._on) fArc(p._x, p._y - cy, p._s * 0.6, p._c);
+      fArc(p._x, p._y - cy, p._s * 0.6, p._c);
     }
   }
 
@@ -1795,7 +1743,7 @@
       const distM = mx(0, fl((drone.y - levelGoalY) / 12));
       if (distM > 0 && distM <= 30) {
         fR(WALL_L + 30, slotY, PLAY_W - 60, 11, BG9);
-        drawText('ALERTA: JEFE A ' + distM + 'M!', W * 0.5, slotY + 2, distM <= 12 ? PAL[8] : PAL[6], 1, 1);
+        drawText('JEFE A ' + distM + 'M!', W * 0.5, slotY + 2, distM <= 12 ? PAL[8] : PAL[6], 1, 1);
         slotY += 13;
       }
     }
@@ -1820,17 +1768,17 @@
       drawText('NIVEL COMPLETADO', W * 0.5, 60, PAL[5], 2, 1, PAL[6]);
       drawText(lv._a, W * 0.5, 82, PAL[10], 1, 1);
       drawDronePod(66, 122 + sn(elapsedTime * 8) * 3, 0, HULLS[selectedHull], 0, -1.2, 1, 1, 0, 0);
-      [['PUNTOS: ' + score, 13], ['SIGUIENTE NIVEL...', 14], ['CURA: +1 HP AL SUBIR', 11]].forEach(([t, c], i) =>
+      [['PUNTOS: ' + score, 13], ['SIGUIENTE NIVEL', 14], ['+1 HP AL SUBIR', 11]].forEach(([t, c], i) =>
         drawText(t, 184, 106 + i * 17, PAL[c], 1, 1)
       );
-      drawText('[ESPACIO] CONTINUAR', W * 0.5, 168, PAL[4], 1, 1);
+      drawText('[ESP] CONTINUAR', W * 0.5, 168, PAL[4], 1, 1);
     } else if (phase === 5) {
       drawPanel(24, 42, W - 48, 156, PAL[0], PAL[5]);
       drawText('MISION CUMPLIDA!', W * 0.5, 54, PAL[6], 2, 1, PAL[13]);
-      [['CIUDADELA CENIT DERROTADA', 78, 10], ['PUNTUACION FINAL: ' + score, 102, 14], ['TIEMPO: ' + fl(runSeconds) + ' SEGUNDOS', 118, 13], ['TODOS LOS NIVELES COMPLETOS', 136, 11]].forEach(([t, y, c]) =>
+      [['CIUDADELA DERROTADA', 78, 10], ['PUNTOS FINALES: ' + score, 102, 14], ['TIEMPO: ' + fl(runSeconds) + 'S', 118, 13], ['NIVELES COMPLETOS', 136, 11]].forEach(([t, y, c]) =>
         drawText(t, W * 0.5, y, PAL[c], 1, 1)
       );
-      addBtn(84, 158, W - 168, 22, 'VOLVER AL MENU [ESP]', PAL[2], goMenu, PAL[5]);
+      addBtn(84, 158, W - 168, 22, 'MENU [ESP]', PAL[2], goMenu, PAL[5]);
     }
 
     if (damageFlash > 0) fR(0, 0, W, H, 'rgba(239,68,68,' + mn(0.35, damageFlash * 0.025) + ')');
@@ -1875,23 +1823,23 @@
 
     drawText('STEAM HOPPER', W * 0.5, 18, PAL[5], 2, 1, PAL[6]);
 
-    [['INICIO', PAL[3], 6], ['HANGAR [T]', '#0e7490', 10], ['GUIA [G]', '#166534', 14]].forEach((t, i) =>
+    [['INICIO', PAL[3], 6], ['HANGAR [T]', PAL[18], 10], ['GUIA [G]', PAL[19], 14]].forEach((t, i) =>
       addBtn(26 + i * 92, 38, 84, 15, t[0], menuTab === i ? t[1] : PAL[1], () => (menuTab = i), menuTab === i ? PAL[t[2]] : PAL[4])
     );
 
     if (menuTab === 0) {
       drawDronePod(W * 0.5, 70 + sn(elapsedTime * 3) * 2, sn(elapsedTime * 2) * 0.08, HULLS[selectedHull], sn(elapsedTime) * 1.4, -0.8, 1, 1, 0, 0);
 
-      drawText('MODALIDAD [M]:', W * 0.5, 92, PAL[11], 1, 1);
+      drawText('MODO [M]:', W * 0.5, 92, PAL[11], 1, 1);
       addBtn(36, 103, W - 72, 17, '<  ' + ['HISTORIA (NV.1-4)', 'BOSS RUSH (4 JEFES)', 'TORRE INFINITA'][gameMode] + '  >', PAL[1], () => cycleMode(1), PAL[10]);
 
       if (gameMode === 0) {
         addBtn(36, 125, W - 72, 17, 'NIVEL [E]: ' + LEVELS[startLevel]._a, PAL[1], () => cycleStartLevel(1), PAL[5]);
       } else if (gameMode === 2) {
         addBtn(36, 125, 138, 17, 'SEMILLA [F]: ' + seed, PAL[1], editSeed, PAL[5]);
-        addBtn(178, 125, 106, 17, 'AZAR [R]: ' + (randomSeed ? 'SI' : 'NO'), randomSeed ? '#0e7490' : PAL[1], toggleRnd, PAL[10]);
+        addBtn(178, 125, 106, 17, 'AZAR [R]: ' + (randomSeed ? 'SI' : 'NO'), randomSeed ? PAL[18] : PAL[1], toggleRnd, PAL[10]);
       } else {
-        drawText('COMBATE CONTINUO CONTRA LOS 4 JEFES', W * 0.5, 130, PAL[6], 1, 1);
+        drawText('DUELO VS 4 JEFES', W * 0.5, 130, PAL[6], 1, 1);
       }
 
       drawText('NAVE: ' + HULLS[selectedHull]._a + ' | ' + SKILLS[selectedSkill]._a, W * 0.5, 150, PAL[13], 1, 1);
@@ -1908,7 +1856,7 @@
 
       for (let i = 0; i < 4; i++) {
         [
-          [20, (i + 1) + '.' + HULLS[i]._a, isHullUnlocked(i), selectedHull === i, inspectHull === i, '#0e7490', () => {
+          [20, (i + 1) + '.' + HULLS[i]._a, isHullUnlocked(i), selectedHull === i, inspectHull === i, PAL[18], () => {
             inspectHull = i;
             if (isHullUnlocked(i)) selectedHull = i;
           }],
@@ -1945,10 +1893,10 @@
       addBtn(76, 184, W - 152, 24, PLAY_LBL, PAL[3], startGame, PAL[6]);
     } else {
       drawPanel(24, 62, W - 48, 114, PAL[0], PAL[14]);
-      ['A/D O FLECHAS: PROPULSORES', 'AMBOS BOTONES: SUBIR RECTO', 'ESPACIO / ABAJO: HABILIDAD', 'ESCUDO PARRY REFLEJA BALAS', 'BASES VERDES: +1 HP Y PSI', '3 NUCLEOS: OVERDRIVE', '[S] AUDIO | [C] CRT | [P] PAUSA'].forEach((t, i) => {
+      ['A/D O FLECHAS: MOVER', 'AMBOS BOTONES: SUBIR', 'ESPACIO/ABAJO: HABILIDAD', 'PARRY REFLEJA BALAS', 'BASES: +1 HP Y PSI', '3 NUCLEOS: OVERDRIVE', '[S] AUDIO | [C] CRT | [P] PAUSA'].forEach((t, i) => {
         drawText(t, W * 0.5, 70 + i * 13, PAL[[13, 11, 6, 10, 14, 9, 4][i]], 1, 1);
       });
-      addBtn(76, 184, W - 152, 24, PLAY_LBL, '#166534', startGame, PAL[14]);
+      addBtn(76, 184, W - 152, 24, PLAY_LBL, PAL[19], startGame, PAL[14]);
     }
   }
 
@@ -1966,14 +1914,14 @@
 
     if (lockS) {
       drawPanel(56, 138, W - 112, 48, PAL[1], PAL[8]);
-      drawText('REVISA TU RESUMEN', W * 0.5, 148, PAL[11], 1, 1);
+      drawText('RESUMEN PARTIDA', W * 0.5, 148, PAL[11], 1, 1);
       drawText('ESPERA ' + lockS + 'S', W * 0.5, 164, PAL[6], 1, 1);
     } else {
       addBtn(56, 138, W - 112, 22, isPause ? 'CONTINUAR [ESP]' : 'REINTENTAR [ESP]', PAL[3], () => {
         if (isPause) gameState = 1;
         else startGame();
       }, PAL[6]);
-      addBtn(56, 166, W - 112, 20, 'MENU PRINCIPAL [M]', PAL[1], goMenu, PAL[10]);
+      addBtn(56, 166, W - 112, 20, 'MENU [M]', PAL[1], goMenu, PAL[10]);
     }
   }
 
@@ -1993,7 +1941,7 @@
     const first = !keys[c];
     keys[c] = true;
     initAudio();
-    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Tab', 'Enter'].includes(c)) e.preventDefault();
+    if (/^(Arrow|Space|Tab|Enter)/.test(c)) e.preventDefault();
     if (!first) return;
     const isOk = c === 'Space' || c === 'Enter';
     const isM = c === 'KeyM';

@@ -87,14 +87,17 @@ async function build() {
   const cw = wMatch ? wMatch[1] : '256';
   const ch = hMatch ? hMatch[1] : '240';
 
-  const htmlContent = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"><title>Steam Hopper</title><link rel="icon" href="data:,"><style>*{margin:0;user-select:none}html,body{width:100%;height:100%;background:#060408;display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none}#c{width:min(100vw,calc(100vh*${cw}/${ch}));height:min(100vh,calc(100vw*${ch}/${cw}));image-rendering:pixelated;border:4px solid #3c2a21;box-shadow:0 0 0 2px #f59e0b44,0 0 40px rgba(255,119,34,.22)}</style></head><body><canvas id="c"></canvas><script>${minJs}</script></body></html>`;
+  const vw = +((cw / ch) * 100).toFixed(2);
+  const vh = +((ch / cw) * 100).toFixed(2);
+
+  const htmlContent = `<!DOCTYPE html><title>Steam Hopper</title><meta name=viewport content="width=device-width,initial-scale=1,user-scalable=no"><link rel=icon href=data:,><style>body{margin:0;height:100vh;background:#060408;display:grid;place-items:center;overflow:hidden;touch-action:none;user-select:none}#c{width:min(100vw,${vw}vh);height:min(100vh,${vh}vw);image-rendering:pixelated;border:4px solid #3c2a21;box-shadow:0 0 0 2px #f59e0b44,0 0 40px #f723}</style><canvas id=c></canvas><script>${minJs}</script>`;
 
   fs.writeFileSync(distHtmlPath, htmlContent, 'utf8');
   fs.writeFileSync(rootHtmlPath, htmlContent, 'utf8');
 
   const bytes = Buffer.byteLength(htmlContent, 'utf8');
-  const kb = (bytes / 1024).toFixed(2);
-  const limit = 32768;
+  const kb = (bytes / 1000).toFixed(2);
+  const limit = 32000;
 
   console.log('====================================================');
   console.log(' STEAM HOPPER - BUILD COMPLETADO (TERSER)');
@@ -103,11 +106,11 @@ async function build() {
   console.log(` Archivo raíz : index.html`);
   console.log(` Archivo dist : dist/index.html`);
   console.log(` Peso exacto  : ${bytes} bytes (${kb} KB / 32.00 KB)`);
-  console.log(` Margen libre : ${limit - bytes} bytes (${((limit - bytes) / 1024).toFixed(2)} KB)`);
+  console.log(` Margen libre : ${limit - bytes} bytes (${((limit - bytes) / 1000).toFixed(2)} KB)`);
   console.log('====================================================');
 
   if (bytes > limit) {
-    console.error('ERROR: El archivo supera el límite de 32 KB (32,768 bytes)!');
+    console.error('ERROR: El archivo supera el límite de 32,000 bytes!');
     process.exit(1);
   }
 }
