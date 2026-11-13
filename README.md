@@ -27,7 +27,7 @@ El objetivo es ascender utilizando dos propulsores independientes mientras evita
   - **Historia (Nv. 1–4):** recorre 4 zonas (*Fundición Carmesí*, *Torre Voltaica*, *Cripta Crio-Ácida* y *Ciudadela Cenit*), cada una con su propio jefe.
   - **Boss Rush:** combate consecutivo contra los 4 jefes.
   - **Torre Infinita:** ascenso procedural infinito con semilla fija (`F`) o aleatoria (`R`).
-- **Hangar (`T`):** elige entre 4 naves y 4 habilidades desbloqueables al superar niveles o alcanzar cierta altura (por ejemplo, **Escudo Parry** para reflejar proyectiles, **Cañón Triple**, **Impulso Rayo** u **Onda Sísmica**).
+- **Hangar (`T`):** elige entre 4 naves y 4 habilidades desbloqueables al superar niveles o alcanzar cierta altura (por ejemplo, **Escudo Parry** para reflejar proyectiles, **Cañón Triple**, **Orbes Escolta** o **Tormenta EMP**).
 
 ---
 
