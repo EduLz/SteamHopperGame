@@ -140,7 +140,7 @@
   }));
 
   // SOLO indice 0 realiza PARRY (28px)! Las demas habilidades ofrecen combate/control/escudo orbital.
-  const SKILLS = tbl('ESCUDO PARRY|BASE|22|86|UNICA CON PARRY 28PX + REFLEJA X2;CANON TRIPLE|BASE|24|70|3 RAYOS PERFORANTES (SIN PARRY);ORBES ESCOLTA|NV.1|22|220|2 ORBES BORRAN BALAS Y ATACAN 3.5S;TORMENTA EMP|NV.2|32|210|BORRA BALAS + RAYOS AL JEFE/ENEMIGOS', (a) => ({
+  const SKILLS = tbl('PARRY|BASE|22|108|PARRY 28PX + REFLEJA X2;CANON TRIPLE|BASE|24|70|3 RAYOS PERFORANTES (SIN PARRY);ORBES ESCOLTA|NV.1|22|220|3 ORBES ESCUDO, SE GASTAN AL CHOCAR;TORMENTA EMP|NV.2|32|210|DESTRUYE HASTA 3 ATAQUES ENEMIGOS CERCANOS', (a) => ({
     // _a:name _b:req _c:cost _l:cd _t:desc
     _a: a[0], _b: a[1], _c: +a[2], _l: +a[3], _t: a[4]
   }));
@@ -200,6 +200,10 @@
   let nextNoteTime = 0;
   let seqStep = 0;
   let barCount = 0;
+  const resetSeq = (d = 0.05) => {
+    seqStep = barCount = 0;
+    if (audioCtx) nextNoteTime = audioCtx.currentTime + d;
+  };
 
   // Clamped a MIDI 36..79 (<= 784 Hz) para evitar agudos estridentes en partidas largas
   const m2f = (midi) => 440 * M.pow(2, (mn(79, mx(36, midi)) - 69) / 12);
@@ -375,7 +379,8 @@
     empR: 0,
     parryRing: 0,
     shield: 0,
-    orbsT: 0
+    orbsT: 0,
+    orbs: 0
   };
 
   const boss = {
@@ -484,11 +489,18 @@
     }
   }
 
-  function hitByOrbs(x, y, rad) {
-    if (drone.orbsT <= 0) return 0;
-    for (let k = 0; k < 2; k++) {
-      const a = elapsedTime * 5.4 + k * M.PI;
-      if (hy(x - (drone.x + cs(a) * 24), y - (drone.y + sn(a) * 24)) < rad) return 1;
+  function hitByOrbs(x, y, rad, consume) {
+    if (drone.orbsT <= 0 || !drone.orbs) return 0;
+    for (let k = 0; k < 3; k++) {
+      if (!(drone.orbs & (1 << k))) continue;
+      const a = elapsedTime * 5.4 + (k * PI2) / 3;
+      if (hy(x - (drone.x + cs(a) * 24), y - (drone.y + sn(a) * 24)) < rad) {
+        if (consume) {
+          drone.orbs &= ~(1 << k);
+          if (!drone.orbs) drone.orbsT = 0;
+        }
+        return 1;
+      }
     }
     return 0;
   }
@@ -641,14 +653,14 @@
     drone.hp = preserveHp ? mn(drone.maxHp, drone.hp + 1) : hull._t;
     drone.invuln = 30;
     drone.pressure = drone.maxPsi = 100;
-    drone.vx = drone.vy = drone.theta = drone.purge = drone.slamCd = drone.empR = drone.parryRing = drone.shield = drone.orbsT = camY = warnAlertLevel = seqStep = barCount = 0;
+    drone.vx = drone.vy = drone.theta = drone.purge = drone.slamCd = drone.empR = drone.parryRing = drone.shield = drone.orbsT = drone.orbs = camY = warnAlertLevel = 0;
 
     lavaY = H + 75;
     boss.active = false;
     bossShots = [];
     playerShots = [];
     empBolts = [];
-    if (audioCtx) nextNoteTime = audioCtx.currentTime + 0.05;
+    resetSeq();
 
     particles = [];
     activeChunks = [];
@@ -673,11 +685,12 @@
       phase = 0;
       showBanner(lv._a, PAL[6], 130);
     } else {
-      topChunkIndex = 1;
+      topChunkIndex = 2;
       for (let i = 0; i <= 2; i++) activeChunks.push(createChunk(i, 0, false));
-      nextBossMeters = 120;
+      nextBossMeters = 200;
+      levelGoalY = 200 - nextBossMeters * 12;
       phase = 0;
-      showBanner('TORRE SEMILLA ' + seed, PAL[10], 120);
+      showBanner('SEMILLA ' + seed + ' | ' + lv._a, PAL[10], 130);
     }
   }
 
@@ -730,9 +743,7 @@
 
     phase = 1;
     phaseTimer = 120;
-    seqStep = 0;
-    barCount = 0;
-    if (audioCtx) nextNoteTime = audioCtx.currentTime + 0.05;
+    resetSeq();
     playJingle(2);
   }
 
@@ -811,7 +822,7 @@
     drone.slamCd = sk._l;
 
     if (selectedSkill === 0) {
-      // 0: ESCUDO PARRY — UNICA con Parry (radio estricto 28px)
+      // 0: PARRY — UNICA con Parry (radio estricto 28px)
       drone.parryRing = 14;
       drone.shield = mx(drone.shield, 18);
       sfxTone(460, 880, 0.12, 1, 0.11);
@@ -846,8 +857,9 @@
       }
       drone.vy = mn(drone.vy + 0.25, MAX_VY_DOWN);
     } else if (selectedSkill === 2) {
-      // 2: ORBES ESCOLTA — 2 satelites orbitales borran balas, destruyen amenazas y golpean jefes
+      // 2: ORBES ESCOLTA — 3 satelites orbitales borran balas y cada uno se gasta al chocar enemigos/jefe
       drone.orbsT = 210;
+      drone.orbs = 7;
       sfxTone(360, 740, 0.14, 1, 0.11);
       burst(drone.x, drone.y, 8, 2.2, 16, PAL[10], PAL[14]);
     } else {
@@ -902,7 +914,7 @@
 
   function triggerGameOver() {
     gameState = 2;
-    phaseTimer = 300;
+    phaseTimer = 60;
     menuTab = 0;
     screenShake = 14;
     if (maxMeters > highScore) {
@@ -980,7 +992,7 @@
       boss.y = boss.baseY + (pt === 2 ? cs : sn)(elapsedTime * m[2]) * m[3];
     }
 
-    if (boss.phaseTimer > [64, 54, 56, 52][pt] / enr) {
+    if (boss.phaseTimer > [64, 43.2, 44.8, 52][pt] / enr) {
       boss.phaseTimer = 0;
       const ang = M.atan2(drone.y - boss.y, drone.x - boss.x);
       if (pt === 0) {
@@ -998,7 +1010,7 @@
       sfxTone(sx[0], sx[1], sx[2], sx[3], sx[4]);
     }
 
-    if (boss.invuln <= 0 && hitByOrbs(boss.x, boss.y, boss.r + 7)) damageBoss(1, 0);
+    if (boss.invuln <= 0 && hitByOrbs(boss.x, boss.y, boss.r + 7, 1)) damageBoss(1, 0);
 
     const db = hy(drone.x - boss.x, drone.y - boss.y) || 0.001;
     if (db <= drone.r + boss.r) {
@@ -1021,13 +1033,15 @@
     if (gameMode === 2) {
       boss.active = false;
       phase = 0;
-      nextBossMeters += 140;
-      currentLevel = (currentLevel + 1) % 4;
+      nextBossMeters += 200;
+      levelGoalY = 200 - nextBossMeters * 12;
+      warnAlertLevel = 0;
+      if (!(currentLevel = (currentLevel + 1) % 4)) ngPlus++;
       drone.hp = mn(drone.maxHp, drone.hp + 1);
       if (activeChunks.length > 0) {
         activeChunks[activeChunks.length - 1]._plats.push({ _x1: mx(WALL_L + 10, drone.x - 45), _y1: drone.y + 14, _x2: mn(WALL_R - 10, drone.x + 45), _y2: drone.y + 23, _w: 90, _cool: 1, _vx: 0 });
       }
-      showBanner('SIGUIENTE! +1 HP', PAL[14], 110);
+      showBanner('ENTORNO ' + LEVELS[currentLevel]._a, PAL[14], 140);
       return;
     }
     if (currentLevel < 3) loadLevelWorld(currentLevel + 1, true);
@@ -1055,9 +1069,7 @@
       camY += (boss.arenaY - camY) * 0.14 * dt;
       if (phaseTimer <= 0) {
         phase = 2;
-        seqStep = 0;
-        barCount = 0;
-        if (audioCtx) nextNoteTime = audioCtx.currentTime + 0.04;
+        resetSeq(0.04);
       }
       return;
     }
@@ -1287,7 +1299,7 @@
         e._x += e._vx * dt;
         if (e._x < WALL_L + 16 || e._x > WALL_R - 16) e._vx = -e._vx;
 
-        let dead = hitByOrbs(e._x, e._y, 13);
+        let dead = hitByOrbs(e._x, e._y, 13, 1);
         if (!dead) {
           for (let j = playerShots.length - 1; j >= 0; j--) {
             if (hy(playerShots[j]._x - e._x, playerShots[j]._y - e._y) < 10) {
@@ -1330,7 +1342,7 @@
         if (g._x < WALL_L + g._r + 6 || g._x > WALL_R - g._r - 6) g._vx = -g._vx;
 
         const ds = hy(drone.x - g._x, drone.y - g._y) || 0.001;
-        if ((drone.overdrive > 0 && ds <= drone.r + g._r) || hitByOrbs(g._x, g._y, g._r + 7)) {
+        if ((drone.overdrive > 0 && ds <= drone.r + g._r) || hitByOrbs(g._x, g._y, g._r + 7, 1)) {
           ch._saws.splice(i, 1);
           score += 100;
           burst(g._x, g._y, 6, 2, 14, PAL[10]);
@@ -1354,7 +1366,7 @@
     const cm = getHeightM(drone.y);
     if (cm > maxMeters) maxMeters = cm;
 
-    if (gameMode === 0) {
+    if (gameMode !== 1) {
       const distM = mx(0, fl((drone.y - levelGoalY) / 12));
       if (distM <= 30 && warnAlertLevel === 0) {
         warnAlertLevel = 1;
@@ -1364,15 +1376,13 @@
         playJingle(2);
       }
       if (drone.y <= levelGoalY) beginBossIntro(currentLevel);
-    } else if (gameMode === 2) {
+    }
+    if (gameMode === 2) {
       while (activeChunks[activeChunks.length - 1]._yTop > camY - H) {
         topChunkIndex++;
-        const nextLv = fl(topChunkIndex / 6) % 4;
-        activeChunks.push(createChunk(topChunkIndex, nextLv, false));
-        currentLevel = nextLv;
+        activeChunks.push(createChunk(topChunkIndex, fl(topChunkIndex / 10) % 4, false));
       }
       if (activeChunks.length > 4 && activeChunks[0]._yTop > camY + H + 120) activeChunks.shift();
-      if (maxMeters >= nextBossMeters) beginBossIntro(fl(maxMeters / 120) % 4);
     }
   }
 
@@ -1402,12 +1412,12 @@
       fR(WALL_L + 16, sy + 6, PLAY_W - 32, 3, p[1]);
       pipes.forEach((px) => fR(px - 1, sy + 18, 14, 4, p[2]));
 
-      if (lv._pat === 0) {
+      if (lv._t === 0) {
         fR(68, sy + 12, 6, 12, PAL[3]);
         fR(246, sy + 12, 6, 12, PAL[3]);
-      } else if (lv._pat === 1) {
+      } else if (lv._t === 1) {
         fR(156, sy + 24, 8, 5, ((elapsedTime * 5) | 0) & 1 ? PAL[10] : PAL[12]);
-      } else if (lv._pat === 3) {
+      } else if (lv._t === 3) {
         fR(96, sy + 10, 4, 14, p[3]);
         fR(220, sy + 10, 4, 14, p[3]);
       } else {
@@ -1512,14 +1522,14 @@
       if (boss.active) drawBossActor(lv);
     } else {
       // Marcadores de horizonte V6 (tramos / torre / meta del jefe)
-      for (let mMark = 60; mMark < 1000; mMark += 60) {
+      for (let mMark = 60; mMark < 2400; mMark += 60) {
         const my = (200 - mMark * 12 - cy) | 0;
         if (my > -10 && my < H + 10) {
           for (let x = WALL_L; x < WALL_R; x += 14) fR(x, my, 7, 1, lv._p[3]);
           drawText('COTA ' + mMark + 'M', WALL_L + 6, my - 8, lv._p[3], 1, 0);
         }
       }
-      if (gameMode === 0) {
+      if (gameMode !== 1) {
         const gy = (levelGoalY - cy) | 0;
         if (gy > -20 && gy < H + 20) {
           for (let x = WALL_L; x < WALL_R; x += 12) fR(x, gy, 7, 2, ((elapsedTime * 10) | 0) & 1 ? PAL[8] : PAL[6]);
@@ -1672,10 +1682,11 @@
       if (drone.empR > 12) fArc(dx, dy, drone.empR * 0.68, PAL[6], 1.5);
     }
 
-    if (drone.orbsT > 0 && (drone.orbsT > 35 || ((drone.orbsT * 0.5) | 0) & 1)) {
+    if (drone.orbsT > 0 && drone.orbs && (drone.orbsT > 35 || ((drone.orbsT * 0.5) | 0) & 1)) {
       fArc(dx, dy, 24, 'rgba(56,189,248,0.28)', 1);
-      for (let k = 0; k < 2; k++) {
-        const a = elapsedTime * 5.4 + k * M.PI;
+      for (let k = 0; k < 3; k++) {
+        if (!(drone.orbs & (1 << k))) continue;
+        const a = elapsedTime * 5.4 + (k * PI2) / 3;
         const ox = dx + cs(a) * 24;
         const oy = dy + sn(a) * 24;
         fArc(ox, oy, 4.5, PAL[10]);
@@ -1724,7 +1735,7 @@
     fR(29, 14, fl(54 * rPsi), 5, drone.purge > 0 ? PAL[8] : phase === 2 || drone.overdrive > 0 ? PAL[10] : rPsi < 0.25 ? PAL[9] : PAL[5]);
     if (phase === 2) drawText('INF', 87, 13, PAL[10], 1, 0);
 
-    const goalText = gameMode === 0 ? maxMeters + '/' + lv._l + 'M' : maxMeters + 'M';
+    const goalText = gameMode === 1 ? maxMeters + 'M' : maxMeters + '/' + (gameMode ? nextBossMeters : lv._l) + 'M';
     drawText(lv._a, 160, 4, PAL[6], 1, 1, PAL[13]);
     drawText('ALT:' + goalText + (grazeCombo > 1 ? ' X' + grazeCombo : ''), 160, 13, PAL[11], 1, 1);
 
@@ -1739,7 +1750,7 @@
       fR(WALL_L + 14, slotY + 10, PLAY_W - 28, 4, PAL[1]);
       fR(WALL_L + 14, slotY + 10, fl(((PLAY_W - 28) * boss.hp) / boss.maxHp), 4, boss.shield > 0 ? PAL[10] : PAL[8]);
       slotY += 18;
-    } else if (gameMode === 0) {
+    } else if (gameMode !== 1) {
       const distM = mx(0, fl((drone.y - levelGoalY) / 12));
       if (distM > 0 && distM <= 30) {
         fR(WALL_L + 30, slotY, PLAY_W - 60, 11, BG9);
@@ -1775,7 +1786,7 @@
     } else if (phase === 5) {
       drawPanel(24, 42, W - 48, 156, PAL[0], PAL[5]);
       drawText('MISION CUMPLIDA!', W * 0.5, 54, PAL[6], 2, 1, PAL[13]);
-      [['CIUDADELA DERROTADA', 78, 10], ['PUNTOS FINALES: ' + score, 102, 14], ['TIEMPO: ' + fl(runSeconds) + 'S', 118, 13], ['NIVELES COMPLETOS', 136, 11]].forEach(([t, y, c]) =>
+      [['CIUDADELA DERROTADA', 78, 10], ['PUNTOS: ' + score, 102, 14], ['TIEMPO: ' + fl(runSeconds) + 'S', 118, 13], ['NIVELES COMPLETOS', 136, 11]].forEach(([t, y, c]) =>
         drawText(t, W * 0.5, y, PAL[c], 1, 1)
       );
       addBtn(84, 158, W - 168, 22, 'MENU [ESP]', PAL[2], goMenu, PAL[5]);
@@ -1804,14 +1815,14 @@
     uiBtns.push({ _x: x, _y: y, _w: w, _l: h, _g: fn });
   }
 
-  const cycleMode = (dir) => {
-    gameMode = (gameMode + dir + 3) % 3;
+  const cycleMode = () => {
+    gameMode = (gameMode + 1) % 3;
     sfxTone(420, 580, 0.06, 0, 0.06);
   };
 
-  const cycleStartLevel = (dir) => {
-    startLevel = (startLevel + dir + 4) % 4;
-    if (startLevel > maxLevelReached) startLevel = dir > 0 ? 0 : mn(3, maxLevelReached);
+  const cycleStartLevel = () => {
+    startLevel = (startLevel + 1) % 4;
+    if (startLevel > maxLevelReached) startLevel = 0;
     sfxTone(360 + startLevel * 60, 520, 0.06, 1, 0.07);
   };
 
@@ -1831,10 +1842,10 @@
       drawDronePod(W * 0.5, 70 + sn(elapsedTime * 3) * 2, sn(elapsedTime * 2) * 0.08, HULLS[selectedHull], sn(elapsedTime) * 1.4, -0.8, 1, 1, 0, 0);
 
       drawText('MODO [M]:', W * 0.5, 92, PAL[11], 1, 1);
-      addBtn(36, 103, W - 72, 17, '<  ' + ['HISTORIA (NV.1-4)', 'BOSS RUSH (4 JEFES)', 'TORRE INFINITA'][gameMode] + '  >', PAL[1], () => cycleMode(1), PAL[10]);
+      addBtn(36, 103, W - 72, 17, '< ' + ['HISTORIA (NV.1-4)', 'BOSS RUSH (4 JEFES)', 'TORRE INFINITA'][gameMode] + ' >', PAL[1], cycleMode, PAL[10]);
 
       if (gameMode === 0) {
-        addBtn(36, 125, W - 72, 17, 'NIVEL [E]: ' + LEVELS[startLevel]._a, PAL[1], () => cycleStartLevel(1), PAL[5]);
+        addBtn(36, 125, W - 72, 17, 'NIVEL [E]: ' + LEVELS[startLevel]._a, PAL[1], cycleStartLevel, PAL[5]);
       } else if (gameMode === 2) {
         addBtn(36, 125, 138, 17, 'SEMILLA [F]: ' + seed, PAL[1], editSeed, PAL[5]);
         addBtn(178, 125, 106, 17, 'AZAR [R]: ' + (randomSeed ? 'SI' : 'NO'), randomSeed ? PAL[18] : PAL[1], toggleRnd, PAL[10]);
@@ -1893,7 +1904,7 @@
       addBtn(76, 184, W - 152, 24, PLAY_LBL, PAL[3], startGame, PAL[6]);
     } else {
       drawPanel(24, 62, W - 48, 114, PAL[0], PAL[14]);
-      ['A/D O FLECHAS: MOVER', 'AMBOS BOTONES: SUBIR', 'ESPACIO/ABAJO: HABILIDAD', 'PARRY REFLEJA BALAS', 'BASES: +1 HP Y PSI', '3 NUCLEOS: OVERDRIVE', '[S] AUDIO | [C] CRT | [P] PAUSA'].forEach((t, i) => {
+      ['A/D O FLECHAS: MOVER', 'AMBOS BOTONES: SUBIR', 'ESP/ABAJO: HABILIDAD', 'PARRY REFLEJA BALAS', 'BASE: +1 HP Y PSI', '3 NUCLEOS: OVERDRIVE', '[S] AUDIO | [C] CRT | [P] PAUSA'].forEach((t, i) => {
         drawText(t, W * 0.5, 70 + i * 13, PAL[[13, 11, 6, 10, 14, 9, 4][i]], 1, 1);
       });
       addBtn(76, 184, W - 152, 24, PLAY_LBL, PAL[19], startGame, PAL[14]);
@@ -1965,8 +1976,8 @@
       }
       if (c === 'KeyT' || c === 'Tab') menuTab = menuTab === 1 ? 0 : 1;
       else if (c === 'KeyG') menuTab = menuTab === 2 ? 0 : 2;
-      else if (isM) cycleMode(1);
-      else if (c === 'KeyE') cycleStartLevel(1);
+      else if (isM) cycleMode();
+      else if (c === 'KeyE') cycleStartLevel();
       else if (c === 'KeyF') editSeed();
       else if (c === 'KeyR') toggleRnd();
       else if (c === 'KeyQ') {
@@ -1979,7 +1990,7 @@
           }
         }
       } else if (c.startsWith('Digit')) {
-        const d = parseInt(c[5], 10) - 1;
+        const d = +c[5] - 1;
         if (d >= 0 && d < 4) {
           inspectHull = d;
           if (isHullUnlocked(d)) selectedHull = d;
