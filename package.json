@@ -13,6 +13,9 @@
     "procedural",
     "32kb"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "canvas": "^3.2.3",
+    "terser": "^5.51.2"
+  }
 }
-

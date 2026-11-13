@@ -1,1009 +1,2020 @@
-/**
- * STEAM HOPPER: HIGH-OCTANE EDITION (v6 - 10 Zone/Boss OSTs, Parry System, Zone Elevator, Pause, NG+ & Foreground Indicators)
- * Restricciones: <= 32 KB sin comprimir, 0 Assets Externos, 100% Vanilla JS, Hasta 240 FPS
- */
-
 (() => {
   'use strict';
 
   // =========================================================================
-  // 1. CONSTANTES, ALIAS MATEMÁTICOS Y 10 BIOMAS / JEFES DE ZONA
+  // 1. CONSTANTES GLOBALES, CANVAS 320x240 Y MOTOR 240 FPS
   // =========================================================================
-  const W = 256;
+  const W = 320;
   const H = 240;
+  const WALL_L = 22;
+  const WALL_R = 298;
+  const PLAY_W = 276;
   const MIN_FRAME_DELTA = 1000 / 240;
-  const WALL_LEFT = 14;
-  const WALL_RIGHT = W - 14;
 
+  const GRAVITY = 0.098;
+  const THRUST_X = 0.158;
+  const THRUST_Y = -0.248;
+  const DRAG = 0.946;
+  const MAX_VX = 2.95;
+  const MAX_VY_UP = -2.72;
+  const MAX_VY_DOWN = 3.35;
+  const RESTITUTION = 0.45;
+  const PARRY_RADIUS = 28;
+  const POOL_SIZE = 72;
   const M = Math;
+  const PI2 = M.PI * 2;
+  const ab = M.abs;
+  const mn = M.min;
+  const mx = M.max;
   const fl = M.floor;
   const rn = M.random;
-  const mx = M.max;
-  const mn = M.min;
   const sn = M.sin;
   const cs = M.cos;
   const hy = M.hypot;
-  const ab = M.abs;
-  const PI = M.PI;
-  const PI2 = PI * 2;
-
-  const [
-    C_BLK,
-    C_DRK,
-    C_RST,
-    C_CPR,
-    C_BRS,
-    C_GLD,
-    C_YLW,
-    C_RDD,
-    C_RED,
-    C_ORG,
-    C_CYN,
-    C_ICE,
-    C_GRY,
-    C_WHT,
-    C_GRN,
-    C_PRP
-  ] = '#06090f|#161920|#3b251e|#7a4832|#c87d3b|#fbbf24|#fde047|#8c1d18|#ef4444|#ff7722|#38bdf8|#bae6fd|#94a3b8|#f8fafc|#4ade80|#c084fc'.split(
-    '|'
-  );
-
-  const hsl = (h, s, l) => 'hsl(' + h + ',' + s + '%,' + l + '%)';
-
-  // 10 Zonas Únicas (Niveles 1 al 10) con sus 10 Jefes, Bonos y Paleta Dinámica
-  const BIOMES =
-    'Z1 FUNDICION|TRITURADOR IGNEO|BLINDAJE (-30% DANO)|12|38;Z2 TALLER VOLTAICO|CENTINELA VOLTAICO|+50% RECARGA VIGAS|205|48;Z3 REACTOR QUIMICO|AUTOMATA TOXICO|TOBERAS ECO (-25% PSI)|142|280;Z4 TIRO TORMENTA|NUCLEO TORMENTA|+1 VIDA MAXIMA|272|195;Z5 CRIPTA CRIO|CRIO-AUTOCLAVE|ENFRIAMIENTO RAPIDO|192|210;Z6 CALDERA RUBI|PIRO-COLOSO|+15% EMPUJE VAPOR|348|45;Z7 CAMARA CUARZO|PRISMA RESONANTE|ROCE +6 PSI EXTRA|42|18;Z8 SECTOR ABISAL|LEVIATAN HIERRO|RECARGA HABILIDAD +25%|220|190;Z9 FRAGUA SOLAR|SOLARIS MK.IX|OVERDRIVE EXTENDIDO|24|52;Z10 CORONA CENIT|EMPERADOR VAPOR|CORONA CENIT NG+ MAX|292|48'
-      .split(';')
-      .map((row) => {
-        const [name, bossName, buffText, h1, h2] = row.split('|');
-        return {
-          name,
-          bossName,
-          buffText: 'BONO: ' + buffText,
-          bg: hsl(h1, 45, 5),
-          wall: hsl(h1, 42, 13),
-          brick: hsl(h1, 45, 21),
-          trim: hsl(h1, 78, 56),
-          plat: hsl(h1, 48, 22),
-          platTop: hsl(h2, 90, 62),
-          gearCol: hsl(h1, 65, 78),
-          gearRim: hsl(h2, 85, 52),
-          lavaDeep: hsl(h1, 80, 26),
-          lavaMid: hsl(h1, 85, 46),
-          lavaTop: hsl(h1, 95, 62),
-          spark: hsl(h2, 95, 76)
-        };
-      });
-
-  const DIFF_STEP = 60;
-  const getBossAlt = (idx) => 110 + idx * 120;
-  const THRUST_X = 0.135;
-  const THRUST_Y = -0.225;
-  const GRAVITY = 0.095;
-  const SLAM_MAX_CD = 135;
-
-  // 4 Vehículos Desbloqueables (Teclas 1-4 en el Taller)
-  const HULLS =
-    'MK.I BRONCE|BASE|5|1|1|1|8|#c87d3b|#fbbf24;MK.II FORJA|RECORD 80M|6|.96|1.02|.9|8|#dc2626|#fde047;MK.III VOLTAICO|RECORD 180M|5|1.18|1.12|.95|10|#0284c7|#bae6fd;MK.IV ESPECTRO|RECORD 300M / JEFE 4|5|1.12|1.08|.8|14|#9333ea|#f5d0fe'
-      .split(';')
-      .map((row) => {
-        const [name, req, hp, tx, ty, psiUse, grazeBonus, body, hi] = row.split('|');
-        return { name, req, hp: +hp, tx: +tx, ty: +ty, psiUse: +psiUse, grazeBonus: +grazeBonus, body, hi };
-      });
-
-  // 4 Habilidades Activas [ESPACIO] (Incluyen capacidad de PARRY / Reflejo de proyectiles)
-  const SKILLS =
-    'ONDA SLAM|BASE|25|ONDA + PARRY REFLEJA PROYECTILES;CANON MAGMA|VENCER JEFE 1|25|3 BOLAS IGNEAS + PARRY CERCANO;ESCUDO VOLTAICO|VENCER JEFE 2|30|ESCUDO + EMBESTIDA + PARRY;IMPULSO TORMENTA|VENCER JEFE 3|20|SALTO PLASMA + DANO + PARRY'
-      .split(';')
-      .map((row) => {
-        const [name, req, cost, desc] = row.split('|');
-        return { name, req, cost: +cost, desc };
-      });
 
   const canvas = document.getElementById('c');
-  const ctx = canvas.getContext('2d', { alpha: false });
   canvas.width = W;
   canvas.height = H;
+  const ctx = canvas.getContext('2d', { alpha: false });
   ctx.imageSmoothingEnabled = false;
 
-  function fR(x, y, w, h, col) {
-    if (col) ctx.fillStyle = col;
-    ctx.fillRect(x, y, w, h);
-  }
-
-  function fArc(x, y, r, col) {
+  const fR = (x, y, w, h, c) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(x | 0, y | 0, w | 0, h | 0);
+  };
+  const fArc = (x, y, r, c) => {
+    ctx.fillStyle = c;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, PI2);
-    ctx.fillStyle = col;
     ctx.fill();
+  };
+  const cArc = (x, y, r, c, w) => {
+    ctx.strokeStyle = c;
+    ctx.lineWidth = w || 1.5;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, PI2);
+    ctx.stroke();
+  };
+  const rot = (x, y, a, fn) => {
+    ctx.save();
+    ctx.translate(x, y);
+    if (a) ctx.rotate(a);
+    fn();
+    ctx.restore();
+  };
+  const hsl = (h, s, l) => 'hsl(' + h + ',' + s + '%,' + l + '%)';
+
+  // Paleta base estilo v6 (#06090f cobre/acero/cian/fuego)
+  const PAL = '#06090f|#161920|#3b251e|#7a4832|#c87d3b|#fbbf24|#fde047|#8c1d18|#ef4444|#ff7722|#38bdf8|#bae6fd|#94a3b8|#f8fafc|#4ade80|#c084fc'.split('|');
+  // 0:BG 1:DARK 2:PIPE 3:RUST 4:COPPER 5:GOLD 6:YG 7:CRIMSON 8:RED 9:ORANGE 10:CYAN 11:ICE 12:STEEL 13:WHITE 14:GREEN 15:PURPLE
+
+  // =========================================================================
+  // 2. FUENTE BITMAP 5x7 BASE-32 NITIDA Y CONTENEDORES V6
+  // =========================================================================
+  const FC = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:,-+/!?[]()><%=|';
+  const FG = 'ehhvhhhuhhuhhuehgggheuhhhhhuvgguggvvggugggehgnhhehhhvhhhe44444e72222ichikokihggggggvhrllhhhhpljhhhehhhhheuhhugggehhhliduhhukihfgge11uv444444hhhhhhehhhhha4hhhllrhhha4ahhhha4444v1248gvejlphhe4c4444eeh168gvu11e11u26aiv22vgu11heegguhhev124888ehhehheehhf11e000004400400440000048000v000044v44012448gg4444404eh24404e88888ee22222e6888886c22222c8421248248g842pq44bj30v000v04444444';
+
+  function drawText(txt, x, y, col, sc, align, topCol) {
+    const str = String(txt).toUpperCase();
+    const s = sc || 1;
+    const tw = str.length * 6 * s - s;
+    const cx = (align === 1 ? x - tw * 0.5 : align === 2 ? x - tw : x) | 0;
+    const py = y | 0;
+
+    for (let pass = 0; pass < 2; pass++) {
+      const o = pass ? 0 : s;
+      if (!pass) ctx.fillStyle = PAL[0];
+      for (let i = 0; i < str.length; i++) {
+        const idx = FC.indexOf(str[i]);
+        if (idx < 0) continue;
+        const bx = cx + i * 6 * s + o;
+        const off = idx * 7;
+        for (let r = 0; r < 7; r++) {
+          const row = parseInt(FG[off + r], 32);
+          if (!row) continue;
+          if (pass) ctx.fillStyle = topCol && r < 3 ? topCol : col;
+          for (let c = 0; c < 5; c++) {
+            if (row & (16 >> c)) ctx.fillRect(bx + c * s, py + r * s + o, s, s);
+          }
+        }
+      }
+    }
+  }
+
+  function drawPanel(x, y, w, h, bg, border) {
+    const bc = border || PAL[4];
+    fR(x, y, w, h, bg || PAL[0]);
+    ctx.strokeStyle = bc;
+    ctx.lineWidth = 2;
+    ctx.strokeRect((x | 0) + 1, (y | 0) + 1, (w | 0) - 2, (h | 0) - 2);
+    for (let k = 0; k < 4; k++) fR(k & 1 ? x + w - 5 : x + 3, k & 2 ? y + h - 5 : y + 3, 2, 2, bc);
   }
 
   function drawToothed(steps, rOut, rIn, fillCol, strokeCol) {
+    ctx.fillStyle = fillCol;
     ctx.beginPath();
     for (let i = 0; i < steps; i++) {
-      const a1 = (i / steps) * PI2;
-      const a2 = ((i + 0.62) / steps) * PI2;
-      const rad = i & 1 ? rIn : rOut;
-      ctx.lineTo(cs(a1) * rad, sn(a1) * rad);
-      ctx.lineTo(cs(a2) * rad, sn(a2) * rad);
+      const a = (i / steps) * PI2;
+      const r = i & 1 ? rOut : rIn;
+      if (i) ctx.lineTo(cs(a) * r, sn(a) * r);
+      else ctx.moveTo(cs(a) * r, sn(a) * r);
     }
     ctx.closePath();
-    ctx.fillStyle = fillCol;
     ctx.fill();
-    ctx.lineWidth = 1.2;
-    ctx.strokeStyle = strokeCol;
-    ctx.stroke();
-  }
-
-  // =========================================================================
-  // 2. TIPOGRAFÍA 5x5 COMPACTA PRE-INDEXADA (ZERO-GC)
-  // =========================================================================
-  const FONT_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-:.%/![]()|=+';
-  const FONT_B36 =
-    '94gtq 2qf0u 92pzz ir8zi blv7m jolz2 9p0z2 jdgn8 92wj2 92wxq 939yp j2uke 9opvz j2kam jomcf jomc0 9osa7 ayp81 8tjm6 4es7g azc5t ab6zj b5i5t b43n5 92ywe j2uj4 93231 j2ukx 9ony6 jfm2s aye5q aydz8 ayhkh at6q9 at6kk je7mn b28 2t8g 4 fnd3n nz0w 2ksn8 8wg0e 8s3f2 3wnba 7j58s 2ksqs 9ubk 34ao'.split(
-      ' '
-    );
-
-  const GLYPH_RUNS = {};
-  for (let idx = 0; idx < FONT_CHARS.length; idx++) {
-    const mask = parseInt(FONT_B36[idx], 36);
-    const runs = [];
-    for (let r = 0; r < 5; r++) {
-      let c = 0;
-      while (c < 5) {
-        if ((mask >> (24 - (r * 5 + c))) & 1) {
-          const startC = c;
-          while (c < 5 && ((mask >> (24 - (r * 5 + c))) & 1)) c++;
-          runs.push(startC, r, c - startC);
-        } else {
-          c++;
-        }
-      }
-    }
-    GLYPH_RUNS[FONT_CHARS[idx]] = runs;
-  }
-
-  function drawText(str, x, y, color, scale = 1, align = 0) {
-    const s = String(str).toUpperCase();
-    const step = 6 * scale;
-    const totalW = s.length * step - scale;
-    const startX = (align === 1 ? x - (totalW >> 1) : align === 2 ? x - totalW : x) | 0;
-    const sy = y | 0;
-
-    for (let pass = 0; pass < 2; pass++) {
-      ctx.fillStyle = pass ? color : '#000';
-      const off = 1 - pass;
-      for (let i = 0; i < s.length; i++) {
-        const runs = GLYPH_RUNS[s[i]];
-        if (!runs) continue;
-        const gx = startX + i * step + off;
-        for (let j = 0; j < runs.length; j += 3) {
-          ctx.fillRect(gx + runs[j] * scale, sy + runs[j + 1] * scale + off, runs[j + 2] * scale, scale);
-        }
-      }
+    if (strokeCol) {
+      ctx.strokeStyle = strokeCol;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
     }
   }
 
   // =========================================================================
-  // 3. GENERADOR PSEUDOALEATORIO DETERMINISTA (LCG)
+  // 3. DATOS DE VEHICULOS, HABILIDADES Y 4 BIOMAS/NIVELES ARTESANALES (HSL V6)
   // =========================================================================
-  let seed = 1985;
-  let rngState = seed;
+  const tbl = (s, fn) => s.split(';').map((r) => fn(r.split('|')));
+  const HULLS = tbl('MK.I BRONCE|BASE|5|1|1|1|8|BALANCEADO Y VERSATIL|#c87d3b|#7a4832|#fbbf24;MK.II FORJA|NV.1 O 100M|6|.95|1.05|.9|8|TANQUE +1 VIDA MAX, -10% PSI|#ef4444|#7a4832|#fde047;MK.III VOLTA|NV.2 O 220M|5|1.16|1.12|.95|10|TURBO +16% MOTOR Y SUBIDA|#38bdf8|#1e3a8a|#fde047;MK.IV ESPECTRO|NV.3 O 360M|5|1.12|1.1|.8|14|ECO -20% PSI, +75% GRAZE|#c084fc|#4c1d95|#38bdf8', (a) => ({
+    _name: a[0], _req: a[1], _hp: +a[2], _tx: +a[3], _ty: +a[4], _psi: +a[5], _grz: +a[6], _trait: a[7], _c1: a[8], _c2: a[9], _c3: a[10]
+  }));
 
-  function setSeed(s) {
-    seed = s >>> 0;
-    rngState = seed || 1;
-  }
+  // SOLO indice 0 realiza PARRY (28px)! Las demas habilidades ofrecen combate/movilidad/control.
+  const SKILLS = tbl('ESCUDO PARRY|BASE|22|86|UNICA CON PARRY 28PX + REFLEJA X2;CANON TRIPLE|BASE|24|70|3 RAYOS PERFORANTES (SIN PARRY);IMPULSO RAYO|NV.1|22|90|DASH INVULNERABLE HACIA ARRIBA;ONDA SISMICA|NV.2|26|108|ATURDE ENEMIGOS 64PX + FRENA', (a) => ({
+    _name: a[0], _req: a[1], _cost: +a[2], _cd: +a[3], _desc: a[4]
+  }));
 
-  function lcg() {
-    rngState = (1664525 * rngState + 1013904223) >>> 0;
-    return rngState / 4294967296;
-  }
-
-  function lcgRange(min, max) {
-    return min + lcg() * (max - min);
-  }
+  const LEVELS = tbl('1: FUNDICION CARMESI|VULCANO MK-I|DRONES IGNEOS Y VAPOR|150|14|38|0|.19|0|4;2: TORRE VOLTAICA|ARLEQUIN VOLT|BOBINAS TESLA Y RESORTES|165|210|188|1|.215|1|4;3: CRIPTA CRIO-ACIDA|DR. CRIO-ACIDO|HIELO Y VAPORES TOXICOS|175|165|88|3|.24|2|5;4: CIUDADELA CENIT|EMPERADOR CENIT|ASALTO IMPERIAL FINAL|190|274|46|4|.265|3|5', (a) => {
+    const h1 = +a[4];
+    const h2 = +a[5];
+    return {
+      _name: a[0], _boss: a[1], _sub: a[2], _lenM: +a[3], _pat: +a[6],
+      _lavaSpd: +a[7], _track: +a[8], _bTrack: +a[9],
+      _bg: hsl(h1, 45, 5), _wall: hsl(h1, 42, 13), _brick: hsl(h1, 45, 21), _trim: hsl(h1, 78, 56),
+      _plat: hsl(h1, 48, 22), _platTop: hsl(h2, 90, 62), _gearCol: hsl(h1, 65, 78), _gearRim: hsl(h2, 85, 52),
+      _lavaDeep: hsl(h1, 80, 26), _lavaMid: hsl(h1, 85, 46), _lavaTop: hsl(h1, 95, 62), _spark: hsl(h2, 95, 76)
+    };
+  });
 
   // =========================================================================
-  // 4. SINTETIZADOR MULTI-TEMA: 10 TEMAS DE ZONA + 10 TEMAS DE BOSS-FIGHT
+  // 4. MOTOR OST HEROICO ESTILO V6 (4 CANALES, SIN ACELERAR NI AGUDOS ESTRIDENTES)
   // =========================================================================
-  let audioCtx = null;
-  let noiseBuf = null;
-  let nextNoteTime = 0;
-  let seqStep = 0;
-  let steamCooldown = 0;
-  let muted = false;
-
-  const m2f = (m) => (m > 0 ? 440 * M.pow(2, (m - 69) / 12) : 0);
-
-  // Melodías de Zona (A/B) y Melodía de Combate de Jefe (C)
-  const HERO_LEAD = 'H HKO KOTROKO KHD DHK HKPOKHK HDF FJM JMRTVRT ROOMKJKJHGHJKMOSTO';
-
-  // Motivo cromático/frigio intenso exclusivo para los duelos de Jefe (Boss Fight OST)
-  const HERO_LEAD_B = 'TKNTWVTNTKNTZWVTPHKPTSPKPHKPVTSPRJMRVTRMVWYV[YWVTSPONOPSTOKJHKOT';
-
-  // Transposición tonal por Zona (0..9) para que cada Zona y cada Jefe tenga su propia firma musical
-  const ZONE_KEYS = [0, 3, -2, 5, 7, -4, 2, -5, 4, 6];
-  const BASS_ROOTS = [36, 32, 34, 31];
+  const WVS = ['square', 'triangle', 'sawtooth'];
+  const LEADS = [
+    // 0: V6 A-Section ("Battle Against a True Hero" homage)
+    'H HKO KOTROKO KHD DHK HKPOKHK HDF FJM JMRTVRT ROOMKJKJHGHJKMOSTO',
+    // 1: V6 B-Section (Heroic Escalation)
+    'TKNTWVTNTKNTZWVTPHKPTSPKPHKPVTSPRJMRVTRMVWYV[YWVTSPONOPSTOKJHKOT',
+    // 2: Torre Voltaica (Heroic Syncopated Lead)
+    'M MJQ QSVTSQS QMJ JMQ MQSQPQM HIK ILN NRUWTVU SQQNMLMKIJMNPQTV',
+    // 3: Cripta Crio-Acida (Haunting Heroic Counterpoint)
+    'K KOQ ORUUTRO QOK KOH HOQ QUTSQOM FJM JMP PSVUTSP OMMKJHJGHJMOQSUW',
+    // 4: Boss Rush / Ciudadela Duel Lead
+    'O ORT TWZXWTQ RPO OMJ JMO ORUUTRO QML LMO OQTTSRQ POOMKJHGHJMORUWZ',
+    // 5: Final Imperial Climax Lead
+    'W WTQ QOM MKH HOM ORU URO QRT TWZ ZWT QOM MKO ORU WVT RPO QTR OMJH',
+    // 6: Menu / Hangar Heroic Pulse (Nueva funcionalidad - estilo v6 suave)
+    'H   K   O   T   R   O   K   H   ',
+    // 7: Level Clear / Victory Anthem (Nueva funcionalidad - estilo v6 triunfal)
+    'C E G L O Q O L F H L O T R O M '
+  ];
+  const SONGS = [
+    { _bpm: 146, _w: 0, _a: 0, _b: 1, _roots: [36, 32, 34, 31] },
+    { _bpm: 152, _w: 1, _a: 2, _b: 1, _roots: [38, 34, 36, 33] },
+    { _bpm: 142, _w: 2, _a: 3, _b: 0, _roots: [36, 31, 32, 34] },
+    { _bpm: 156, _w: 0, _a: 4, _b: 5, _roots: [36, 32, 34, 35] },
+    { _bpm: 162, _w: 0, _a: 1, _b: 4, _roots: [36, 32, 34, 31] },
+    { _bpm: 166, _w: 2, _a: 5, _b: 1, _roots: [38, 34, 36, 33] },
+    { _bpm: 120, _w: 1, _a: 6, _b: 6, _roots: [36, 32, 34, 31] },
+    { _bpm: 136, _w: 0, _a: 7, _b: 7, _roots: [36, 41, 43, 36] }
+  ];
   const CHORD_ARPS = [
     [60, 63, 67, 72],
     [56, 60, 63, 68],
     [58, 62, 65, 70],
     [55, 59, 62, 67]
   ];
-  const WAVE_TYPES = ['square', 'sawtooth', 'triangle'];
+
+  let audioCtx = null;
+  let noiseBuf = null;
+  let bgmFilter = null;
+  let soundMode = 0;
+  let nextNoteTime = 0;
+  let seqStep = 0;
+  let barCount = 0;
+
+  // Clamped a MIDI 36..79 (<= 784 Hz) para evitar agudos estridentes en partidas largas
+  const m2f = (midi) => 440 * M.pow(2, (mn(79, mx(36, midi)) - 69) / 12);
 
   function initAudio() {
-    if (audioCtx) {
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      return;
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      audioCtx = new AC();
+      bgmFilter = audioCtx.createBiquadFilter();
+      bgmFilter.type = 'lowpass';
+      bgmFilter.frequency.value = 2600;
+      bgmFilter.connect(audioCtx.destination);
+      const len = audioCtx.sampleRate * 0.25;
+      noiseBuf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = rn() * 2 - 1;
     }
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    audioCtx = new AC();
-    const sr = audioCtx.sampleRate;
-    noiseBuf = audioCtx.createBuffer(1, sr * 0.25, sr);
-    const data = noiseBuf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = rn() * 2 - 1;
-    nextNoteTime = audioCtx.currentTime + 0.05;
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
   }
 
-  function playOsc(type, f0, f1, t, dur, v0) {
-    if (!audioCtx || muted) return;
-    const osc = audioCtx.createOscillator();
+  function toneAt(f0, f1, dur, time, type, vol, toBgm) {
+    if (!audioCtx) return;
+    const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(f0, t);
-    if (f1 !== f0) osc.frequency.exponentialRampToValueAtTime(mx(20, f1), t + dur);
-    g.gain.setValueAtTime(v0, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    osc.connect(g);
-    g.connect(audioCtx.destination);
-    osc.start(t);
-    osc.stop(t + dur + 0.005);
+    o.type = type;
+    o.frequency.setValueAtTime(f0, time);
+    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(mx(25, f1), time + dur);
+    g.gain.setValueAtTime(0.0001, time);
+    g.gain.linearRampToValueAtTime(vol, time + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0008, time + dur);
+    o.connect(g);
+    g.connect(toBgm && bgmFilter ? bgmFilter : audioCtx.destination);
+    o.start(time);
+    o.stop(time + dur + 0.01);
   }
 
-  function playNoise(fltType, freq, q, t, dur, v0) {
-    if (!audioCtx || muted) return;
+  function sfxTone(f0, f1, dur, type, vol) {
+    if (soundMode === 2 || !audioCtx) return;
+    toneAt(f0, f1, dur, audioCtx.currentTime, type, vol, 0);
+  }
+
+  function playNoiseAt(freq, q, time, dur, vol) {
+    if (soundMode !== 0 || !audioCtx || !noiseBuf) return;
     const src = audioCtx.createBufferSource();
     src.buffer = noiseBuf;
     const flt = audioCtx.createBiquadFilter();
-    flt.type = fltType;
-    flt.frequency.setValueAtTime(freq, t);
-    if (q) flt.Q.setValueAtTime(q, t);
+    flt.type = 'highpass';
+    flt.frequency.value = freq;
+    flt.Q.value = q;
     const g = audioCtx.createGain();
-    g.gain.setValueAtTime(v0, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    g.gain.setValueAtTime(vol, time);
+    g.gain.exponentialRampToValueAtTime(0.001, time + dur);
     src.connect(flt);
     flt.connect(g);
-    g.connect(audioCtx.destination);
-    src.start(t);
-    src.stop(t + dur + 0.005);
+    g.connect(bgmFilter || audioCtx.destination);
+    src.start(time);
+    src.stop(time + dur + 0.01);
   }
 
-  function scheduleNote(step, time, stepDur) {
-    const bIdx = getBiomeIndex();
-    const isBoss = boss.active;
-    // Transposición y progresión distintas para cada Zona (0..9) y para cada Jefe (0..9)
-    const keyShift = ZONE_KEYS[isBoss ? boss.type : bIdx] + (isBoss ? 1 : 0);
-    const bar = ((step >> 4) + (isBoss ? boss.type : bIdx)) & 3;
-    const sub = step & 15;
-    const isSectionB = isBoss || ((step >> 6) & 1) === 1;
-
-    // 1. Bajo sintetizado: en Boss-Fight galopa en semicorcheas agresivas con salto de quinta/octava
-    const rootMidi = BASS_ROOTS[bar] + keyShift;
-    const bassMidi = isBoss
-      ? rootMidi + (sub & 1 ? 12 : (sub & 2 ? 7 : 0))
-      : (sub & 3) === 2
-      ? rootMidi + 12
-      : rootMidi;
-    if (isBoss || (sub & 3) !== 1 || isSectionB) {
-      playOsc(isBoss || bIdx & 1 ? 'sawtooth' : 'triangle', m2f(bassMidi), m2f(bassMidi), time, stepDur * 0.88, isBoss ? 0.052 : 0.042);
+  function playJingle(kind) {
+    if (soundMode === 2 || !audioCtx) return;
+    const now = audioCtx.currentTime;
+    const seqs = [
+      [60, 64, 67, 72],
+      [60, 63, 67, 70, 72, 75],
+      [57, 45, 57, 45],
+      [67, 64, 60]
+    ];
+    const seq = seqs[kind];
+    for (let i = 0; i < seq.length; i++) {
+      const t = now + i * (kind === 2 ? 0.11 : 0.08);
+      toneAt(m2f(seq[i]), m2f(seq[i]), 0.14, t, kind === 2 ? 'sawtooth' : 'square', 0.065, 1);
     }
-
-    // 2. Percusión temática: doble bombo y redobles intensos en Boss-Fight
-    if (sub % (isBoss ? 2 : 4) === 0 || (sub === 14 && bar === 3)) {
-      playOsc('sine', isBoss ? 150 : 125, 34, time, 0.085, 0.11);
-    }
-    if (sub % 8 === 4 || (isBoss && sub % 4 === 2) || (bar === 3 && sub >= 12 && sub % 2 === 1)) {
-      playNoise('highpass', isBoss ? 750 : 950, 0, time, 0.09, 0.065);
-    } else if (sub % 2 === 1) {
-      playNoise('highpass', 5200, 0, time, 0.035, 0.022);
-    }
-
-    // 3. Melodía Principal con timbre e inversión propios de cada Zona / Jefe
-    const patIdx = isBoss ? (step + boss.type * 4) & 63 : (step + (bIdx & 1 ? 16 : 0)) & 63;
-    let leadMidi = (isSectionB ? HERO_LEAD_B : HERO_LEAD).charCodeAt(patIdx);
-    if (leadMidi > 60) {
-      leadMidi += keyShift + (isBoss && (sub & 3) === 3 ? -1 : 0);
-      const f = m2f(leadMidi);
-      const leadWave = WAVE_TYPES[(isBoss ? boss.type + 1 : bIdx) % 3];
-      playOsc(leadWave, f, f * 1.005, time, stepDur * (isBoss ? 1.15 : 1.4), 0.04);
-    }
-
-    // 4. Arpegio armónico con patrón rítmico variable según la Zona
-    const arpStep = isBoss ? (3 - (sub & 3)) : (sub + bIdx) & 3;
-    const arpMidi = CHORD_ARPS[bar][arpStep] + keyShift + (bIdx >= 5 ? 12 : 0);
-    playOsc(isBoss ? 'square' : 'triangle', m2f(arpMidi), m2f(arpMidi), time, stepDur * 0.8, 0.032);
   }
 
   function updateBGM() {
-    if (!audioCtx || muted || gameState !== 1) return;
-    const bIdx = getBiomeIndex();
-    // Cada Zona tiene su propio tempo base (146..173 BPM) y cada Jefe tiene su propio tempo de batalla (174..202 BPM)
-    const bpm = drone.overdrive > 0
-      ? 198
-      : boss.active
-      ? 174 + boss.type * 3 + (boss.hp <= boss.maxHp >> 1 ? 8 : 0)
-      : mn(182, 146 + bIdx * 3 + (diffLevel - 1) * 2);
-    const stepDur = 15 / bpm;
-    const now = audioCtx.currentTime;
-    if (nextNoteTime < now) nextNoteTime = now + 0.02;
-    while (nextNoteTime < now + 0.1) {
-      scheduleNote(seqStep, nextNoteTime, stepDur);
+    if (soundMode !== 0 || !audioCtx || audioCtx.state !== 'running') return;
+    if (gameState === 1 && (phase === 1 || phase === 3)) return;
+    const isCalm = gameState !== 1;
+    const isClear = gameState === 1 && phase >= 4;
+    const lv = LEVELS[currentLevel % 4];
+    const song = SONGS[isCalm ? 6 : isClear ? 7 : phase === 2 ? lv._bTrack : lv._track];
+    const stepDur = 60 / (song._bpm * 4);
+    const barShift = isCalm || isClear ? 0 : [0, 0, 2, -1][barCount & 3];
+    const lVol = isCalm ? 0.022 : 0.04;
+
+    while (nextNoteTime < audioCtx.currentTime + 0.09) {
+      const idx = seqStep & 63;
+      const chordIdx = (idx >> 4) & 3;
+      const pat = LEADS[(barCount & 1) ? song._b : song._a];
+      const ch = pat[idx % pat.length];
+
+      // Canal 1: Melodia Heroica V6
+      if (ch && ch !== ' ') {
+        const midi = ch.charCodeAt(0) + barShift;
+        toneAt(m2f(midi), m2f(midi), stepDur * 1.6, nextNoteTime, WVS[song._w], lVol, 1);
+        if ((idx & 3) === 0 && !isCalm) {
+          toneAt(m2f(midi - 5), m2f(midi - 5), stepDur * 1.4, nextNoteTime, WVS[1], 0.022, 1);
+        }
+      }
+
+      // Canal 2: Bajo motriz en corcheas/semicorcheas
+      if ((idx & 1) === 0 || (gameState === 1 && phase === 2)) {
+        const root = song._roots[chordIdx] + (idx & 4 ? 12 : 0) + (barShift === -1 ? -1 : 0);
+        toneAt(m2f(root), m2f(root), stepDur * 1.35, nextNoteTime, WVS[1], isCalm ? 0.032 : 0.065, 1);
+      }
+
+      // Canal 3: Arpegio armonico brillante (sin subir de octava)
+      if ((idx & 3) === 2 || (gameState === 1 && phase === 2 && (idx & 1) === 1)) {
+        const arp = CHORD_ARPS[chordIdx];
+        const am = arp[(idx >> 1) & 3] + (barShift === -1 ? -1 : 0);
+        toneAt(m2f(am), m2f(am), stepDur * 1.1, nextNoteTime, WVS[0], isCalm ? 0.01 : 0.016, 1);
+      }
+
+      // Canal 4: Percusion Kick / Snare / Hi-hat
+      if (!isCalm) {
+        if ((idx & 7) === 0 || (phase === 2 && (idx & 7) === 6)) toneAt(138, 36, 0.08, nextNoteTime, 'sine', 0.075, 1);
+        else if ((idx & 7) === 4) playNoiseAt(2200, 1.2, nextNoteTime, 0.06, 0.032);
+        else if ((idx & 1) === 0) playNoiseAt(5400, 2, nextNoteTime, 0.025, 0.014);
+      }
+
       nextNoteTime += stepDur;
-      seqStep = (seqStep + 1) & 127;
+      seqStep = (seqStep + 1) & 63;
+      if (seqStep === 0) barCount++;
     }
   }
 
   function sfxSteam(dual) {
-    if (audioCtx) playNoise('bandpass', dual ? 920 : 800, 2.2, audioCtx.currentTime, 0.08, dual ? 0.08 : 0.05);
-  }
-
-  function sfxBounce(intensity = 1) {
-    if (audioCtx) playOsc('sine', 220 * mn(1.4, mx(0.8, intensity)), 40, audioCtx.currentTime, 0.08, mn(0.18, 0.09 * intensity));
-  }
-
-  function sfxTone(f0, f1, dur, type = 'square', vol = 0.08) {
-    if (audioCtx) playOsc(type, f0, f1, audioCtx.currentTime, dur, vol);
-  }
-
-  function playGateWarning() {
-    sfxTone(520, 880, 0.18, 'sawtooth', 0.09);
-    setTimeout(() => sfxTone(440, 780, 0.22, 'sawtooth', 0.09), 190);
-  }
-
-  // =========================================================================
-  // 5. SISTEMA DE PARTÍCULAS (OBJECT POOL DE 64 OBJETOS)
-  // =========================================================================
-  const POOL_SIZE = 64;
-  const particles = Array.from({ length: POOL_SIZE }, () => ({
-    active: false,
-    type: 0,
-    x: 0,
-    y: 0,
-    vx: 0,
-    vy: 0,
-    life: 0,
-    maxLife: 1,
-    size: 2
-  }));
-  let poolIdx = 0;
-
-  function spawnParticle(type, x, y, vx, vy, life, size) {
-    const p = particles[poolIdx];
-    poolIdx = (poolIdx + 1) & (POOL_SIZE - 1);
-    p.active = true;
-    p.type = type;
-    p.x = x;
-    p.y = y;
-    p.vx = vx;
-    p.vy = vy;
-    p.life = life;
-    p.maxLife = life;
-    p.size = size;
-  }
-
-  function updateParticles(dt) {
-    const dragPow = M.pow(0.9, dt);
-    for (let i = 0; i < POOL_SIZE; i++) {
-      const p = particles[i];
-      if (!p.active) continue;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-      if (p.type === 1) p.vy += 0.12 * dt;
-      else if (p.type === 0) {
-        p.vx *= dragPow;
-        p.vy = p.vy * dragPow - 0.02 * dt;
-      } else p.vy -= 0.03 * dt;
-      p.life -= dt;
-      if (p.life <= 0) p.active = false;
-    }
-  }
-
-  function drawParticles(camY, biome) {
-    for (let i = 0; i < POOL_SIZE; i++) {
-      const p = particles[i];
-      if (!p.active) continue;
-      const sy = (p.y - camY) | 0;
-      if (sy < -8 || sy > H + 8) continue;
-      const sx = p.x | 0;
-      const ratio = p.life / p.maxLife;
-      if (p.type === 0) {
-        const sz = ratio > 0.6 ? p.size : mx(1, p.size - 1);
-        fR(sx - (sz >> 1), sy - (sz >> 1), sz, sz, ratio > 0.45 ? C_WHT : C_GRY);
-      } else if (p.type === 1) {
-        fR(sx, sy, p.size, p.size, ratio > 0.4 ? biome.spark : biome.lavaTop);
-      } else {
-        fR(sx, sy, p.size, p.size, ratio > 0.5 ? biome.lavaTop : biome.lavaMid);
-      }
-    }
+    if (soundMode === 2 || !audioCtx || !noiseBuf) return;
+    const now = audioCtx.currentTime;
+    const src = audioCtx.createBufferSource();
+    src.buffer = noiseBuf;
+    const flt = audioCtx.createBiquadFilter();
+    flt.type = 'bandpass';
+    flt.frequency.value = dual ? 980 : 720;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(dual ? 0.04 : 0.024, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.055);
+    src.connect(flt);
+    flt.connect(g);
+    g.connect(audioCtx.destination);
+    src.start(now);
+    src.stop(now + 0.06);
   }
 
   // =========================================================================
-  // 6. ESTADO GLOBAL, PROGRESIÓN, ASCENSOR DE ZONA, PARRY Y ARENA DE JEFE
+  // 5. ESTADO DEL JUEGO, SINGLETONS Y PERSISTENCIA
   // =========================================================================
-  let gameState = 0; // 0: Menú, 1: Jugando, 2: Game Over, 3: Pausa
-  let menuTab = 0; // 0: Guía Rápida, 1: Taller (Vehículos, Habilidades y Ascensor)
-  let highScore = 0;
-  let bossUnlockMask = 0; // Bits 0..9: Jefes 1..10 derrotados históricamente
-  let selectedHull = 0;
-  let selectedSkill = 0;
-  let startZone = 0; // Ascensor de Zona Inicial (0..9, desbloqueable al vencer jefes)
-  let crtEnabled = true;
+  const stGet = (k) => { try { return parseInt(localStorage.getItem(k) || '0', 10) || 0; } catch (_) { return 0; } };
+  let highScore = stGet('sh7_hi');
+  let maxLevelReached = stGet('sh7_lv');
+  function saveProg() {
+    try {
+      localStorage.setItem('sh7_hi', highScore);
+      localStorage.setItem('sh7_lv', maxLevelReached);
+    } catch (_) {}
+  }
 
-  try {
-    highScore = parseInt(localStorage.getItem('sh_hi') || '0', 10) || 0;
-    bossUnlockMask = parseInt(localStorage.getItem('sh_unl') || '0', 10) || 0;
-  } catch (_) {}
-
-  const isHullUnlocked = (idx) =>
-    idx === 0 ||
-    (idx === 1 && highScore >= 80) ||
-    (idx === 2 && highScore >= 180) ||
-    (idx === 3 && (highScore >= 300 || (bossUnlockMask & 8) !== 0));
-
-  const isSkillUnlocked = (idx) => idx === 0 || (bossUnlockMask & (1 << (idx - 1))) !== 0;
-  const isZoneUnlocked = (z) => z === 0 || (bossUnlockMask & (1 << (z - 1))) !== 0;
-
-  const DRAG = 0.945;
-  const MAX_VX = 1.95;
-  const MAX_VY_UP = -2.25;
-  const MAX_VY_DOWN = 3.4;
-  const RESTITUTION = 0.45;
-
+  // Importante para build.js flattenSingletons: mantener sin {} anidados ni comas en expresiones!
   const drone = {
-    x: W / 2,
-    y: 184,
+    x: 160,
+    y: 185,
     vx: 0,
     vy: 0,
-    r: 7,
+    r: 6,
     theta: 0,
-    pressure: 100,
-    maxPsi: 100,
     hp: 5,
     maxHp: 5,
     invuln: 0,
-    shield: 0,
+    pressure: 100,
+    maxPsi: 100,
     purge: 0,
-    overdrive: 0,
-    comboCores: 0,
-    slamWaveR: 0,
-    slamWaveX: 0,
-    slamWaveY: 0,
-    slamCd: 0,
-    grazeCd: 0,
+    leftOn: false,
+    rightOn: false,
     cooling: false,
     grounded: false,
-    leftOn: false,
-    rightOn: false
+    cores: 0,
+    overdrive: 0,
+    grazeCd: 0,
+    slamCd: 0,
+    slamWaveR: 0,
+    parryRing: 0,
+    shield: 0,
+    dashT: 0
   };
-
-  let playerShots = [];
 
   const boss = {
     active: false,
     type: 0,
-    x: W / 2,
+    x: 160,
     y: 0,
     baseY: 0,
-    arenaY: 0,
-    vx: 1.2,
-    vy: 0,
+    vx: 1,
     r: 17,
-    hp: 6,
-    maxHp: 6,
-    hitFlash: 0,
-    shield: 0,
+    hp: 8,
+    maxHp: 8,
+    arenaY: 0,
     phaseTimer: 0,
-    actionState: 0,
-    coreTimer: 0,
-    shots: []
+    invuln: 0,
+    shield: 0
   };
 
-  let startY = 184;
+  let bossShots = [];
+  let playerShots = [];
+  let activeChunks = [];
+
+  const particles = [];
+  let poolIdx = 0;
+  for (let i = 0; i < POOL_SIZE; i++) {
+    particles.push({ _on: 0, _t: 0, _x: 0, _y: 0, _vx: 0, _vy: 0, _l: 0, _s: 2, _c: PAL[3] });
+  }
+
+  let gameState = 0; // 0: Menu, 1: Jugando, 2: GameOver, 3: Pausa
+  let menuTab = 0; // 0: Principal, 1: Hangar, 2: Guia
+  let gameMode = 0; // 0: Historia, 1: Boss Rush, 2: Torre Infinita
+  let phase = 0; // 0: Ascenso, 1: Boss Intro, 2: Boss Fight, 3: Boss Defeat, 4: Level Clear, 5: Victoria
+  let phaseTimer = 0;
+  let currentLevel = 0;
+  let startLevel = 0;
+  let selectedHull = 0;
+  let selectedSkill = 0;
+  let inspectHull = 0;
+  let inspectSkill = 0;
+  let ngPlus = 0;
+  let crtEnabled = true;
+
+  let seed = 1985;
+  let randomSeed = true;
+  let rngState = 1;
   let camY = 0;
-  let lavaY = 250;
-  let elapsedTime = 0;
-  let currentMeters = 0;
+  let lavaY = H + 50;
   let maxMeters = 0;
-  let diffLevel = 1;
-  let biomeStage = 0;
-  let bossBuffs = 0;
-  let ngPlus = 0; // Nivel de Ascenso Infinito New Game+ tras derrotar al Jefe 10
-  let nextBossIdx = 0;
-  let nextBossMeters = getBossAlt(0);
-  let levelBannerTimer = 0;
-  let bannerText = '';
-  let surgeTimer = 0;
-  let nextSurgeMeters = 120;
-  let deathReason = 'CONSUMIDO POR EL MAGMA';
+  let score = 0;
+  let grazeCombo = 0;
+  let grazeTimer = 0;
+  let runSeconds = 0;
+  let topChunkIndex = 0;
+  let levelGoalY = -1800;
+  let warnAlertLevel = 0;
+
+  let elapsedTime = 0;
+  let steamCooldown = 0;
   let screenShake = 0;
   let damageFlash = 0;
-  let chromaTimer = 0;
+  let bannerText = '';
+  let bannerCol = PAL[6];
+  let bannerTimer = 0;
+  let deathReason = '';
+  let nextBossMeters = 120;
+  let uiBtns = [];
 
-  let activeChunks = [];
-  let topChunkIndex = -1;
-
-  const getHeightMetersAtY = (y) => mx(0, fl((startY - y) / 12));
-  const getDiffAtMeters = (m) => 1 + fl(m / DIFF_STEP) + ngPlus * 2;
-  const getBiomeIndex = () => biomeStage % 10;
-  const getMaxSlamCd = () => (bossBuffs & 128 ? 100 : SLAM_MAX_CD);
-
-  function triggerGraze(gx, gy) {
-    if (drone.grazeCd > 0) return;
-    const gain = HULLS[selectedHull].grazeBonus + (bossBuffs & 64 ? 6 : 0);
-    drone.grazeCd = 18;
-    drone.pressure = mn(drone.maxPsi, drone.pressure + gain);
-    bannerText = '+' + gain + ' PSI ROCE!';
-    levelBannerTimer = 36;
-    sfxTone(780, 1180, 0.06, 'triangle', 0.06);
-    for (let i = 0; i < 5; i++) {
-      spawnParticle(1, (drone.x + gx) * 0.5, (drone.y + gy) * 0.5, (rn() - 0.5) * 2, -1 - rn(), 12, 2);
-    }
-  }
-
-  function applyDamage(energyLoss, hpLoss, reason) {
-    if (drone.invuln > 0 || drone.overdrive > 0 || drone.shield > 0) return;
-    drone.invuln = 50;
-    damageFlash = 10;
-    chromaTimer = 14;
-    screenShake = 9;
-    const dmgFactor = bossBuffs & 1 ? 0.7 : 1.0;
-    if (!boss.active) {
-      drone.pressure = mx(0, drone.pressure - energyLoss * dmgFactor);
-    }
-
-    if (hpLoss > 0) {
-      drone.hp = mx(0, drone.hp - hpLoss);
-    }
-    sfxTone(160, 45, 0.25, 'sawtooth', 0.16);
-
-    if (drone.hp <= 0) {
-      deathReason = reason || 'DRON DESTRUIDO';
-      triggerGameOver();
-      return;
-    }
-    if (!boss.active && drone.pressure <= 0 && drone.purge <= 0) {
-      drone.pressure = 0;
-      drone.purge = 72;
-    }
-  }
-
-  function spawnBoss(bType) {
-    const idx = bType % 10;
-    boss.active = true;
-    boss.type = idx;
-    boss.maxHp = 6 + idx + (idx >> 1) + ngPlus * 4;
-    boss.hp = boss.maxHp;
-    boss.arenaY = drone.y - H * 0.58;
-    camY = boss.arenaY;
-    boss.x = W / 2;
-    boss.baseY = boss.arenaY + 62;
-    boss.y = boss.baseY;
-    boss.vx = 1.2 + idx * 0.11 + ngPlus * 0.2;
-    boss.vy = 0;
-    boss.r = 17;
-    boss.hitFlash = 0;
-    boss.shield = 0;
-    boss.phaseTimer = 0;
-    boss.actionState = 0;
-    boss.coreTimer = 95;
-    boss.shots = [];
-
-    drone.pressure = drone.maxPsi;
-    drone.purge = 0;
-    for (let c = 0; c < activeChunks.length; c++) {
-      activeChunks[c].cores = [];
-    }
-
-    chromaTimer = 15;
-    playGateWarning();
-  }
-
-  function damageBoss(dmg, breakShield = false) {
-    if (!boss.active || boss.hitFlash > 0) return;
-
-    if (boss.shield > 0 && !breakShield) {
-      sfxBounce(1.4);
-      bannerText = '!ESCUDO! HAZ PARRY O TOMA NUCLEO';
-      levelBannerTimer = 45;
-      return;
-    }
-
-    boss.shield = 0;
-    boss.hp = mx(0, boss.hp - dmg);
-    boss.hitFlash = 52;
-    playerShots = [];
-    screenShake = 11;
-    chromaTimer = 12;
-    sfxTone(420, 120, 0.22, 'sawtooth', 0.15);
-
-    const dx = drone.x - boss.x;
-    const dy = drone.y - boss.y;
-    const d = hy(dx, dy) || 1;
-    drone.vx = (dx / d) * 1.75;
-    drone.vy = mx(0.9, (dy / d) * 1.75);
-
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 14) * PI2;
-      spawnParticle(1, boss.x, boss.y, cs(a) * 2.5, sn(a) * 2.5, 18, 3);
-    }
-
-    if (boss.hp <= 0) {
-      const bType = boss.type;
-      boss.active = false;
-      boss.shots = [];
-      biomeStage++;
-      if (bType === 9) ngPlus++;
-
-      bossUnlockMask |= 1 << bType;
-      try {
-        localStorage.setItem('sh_unl', String(bossUnlockMask));
-      } catch (_) {}
-
-      bossBuffs |= 1 << bType;
-      if (bType === 3 || bType === 9) drone.maxHp++;
-      drone.hp = bType === 9 ? drone.maxHp : mn(drone.maxHp, drone.hp + 2);
-      drone.pressure = drone.maxPsi;
-      drone.overdrive = bossBuffs & 256 ? 270 : 190;
-
-      if (activeChunks.length > 0) {
-        activeChunks[activeChunks.length - 1].platforms.push({
-          x1: WALL_LEFT + 36,
-          y1: (drone.y + 22) | 0,
-          x2: WALL_RIGHT - 36,
-          y2: (drone.y + 31) | 0,
-          w: WALL_RIGHT - WALL_LEFT - 72,
-          cool: 1,
-          wall: false,
-          vx: 0,
-          broken: 0
-        });
-      }
-
-      bannerText = BIOMES[bType].buffText;
-      levelBannerTimer = 165;
-      screenShake = 16;
-      chromaTimer = 22;
-      sfxTone(261.6, 1046.5, 0.45, 'square', 0.14);
-
-      nextBossIdx++;
-      nextBossMeters = getBossAlt(nextBossIdx);
-    }
-  }
-
-  function triggerActiveSkill() {
-    if (gameState !== 1 || drone.purge > 0 || drone.slamCd > 0) return;
-    const sk = SKILLS[selectedSkill];
-    if (!boss.active && drone.pressure < sk.cost && drone.overdrive <= 0) return;
-    if (!boss.active && drone.overdrive <= 0) drone.pressure = mx(0, drone.pressure - sk.cost);
-
-    drone.slamCd = getMaxSlamCd();
-    screenShake = 7;
-    chromaTimer = 8;
-
-    if (selectedSkill === 0) {
-      drone.vy = boss.active ? -1.2 : mn(MAX_VY_DOWN * 1.35, drone.vy + 2.6);
-      drone.slamWaveR = 2;
-      drone.slamWaveX = drone.x;
-      drone.slamWaveY = drone.y;
-      sfxTone(380, 55, 0.22, 'triangle', 0.15);
-      sfxSteam(true);
-
-      for (let i = 0; i < 14; i++) {
-        const a = (i / 14) * PI2;
-        spawnParticle(0, drone.x, drone.y, cs(a) * 2.4, sn(a) * 2.4, 18, 3);
-      }
-      if (boss.active && hy(boss.x - drone.x, boss.y - drone.y) < 92) damageBoss(1);
-    } else if (selectedSkill === 1) {
-      drone.vy = mx(MAX_VY_UP, drone.vy + 0.55);
-      for (let k = -1; k <= 1; k++) {
-        playerShots.push({ x: drone.x + k * 5, y: drone.y - 6, vx: k * 0.75, vy: -3.4, parry: 0 });
-      }
-      sfxTone(540, 160, 0.18, 'sawtooth', 0.14);
-    } else if (selectedSkill === 2) {
-      drone.shield = 155;
-      sfxTone(320, 880, 0.25, 'square', 0.12);
-    } else {
-      drone.vy = MAX_VY_UP * 1.45;
-      drone.pressure = mn(drone.maxPsi, drone.pressure + 15);
-      drone.slamWaveR = 2;
-      drone.slamWaveX = drone.x;
-      drone.slamWaveY = drone.y;
-      sfxTone(240, 960, 0.22, 'sawtooth', 0.14);
-      if (boss.active && hy(boss.x - drone.x, boss.y - drone.y) < 94) damageBoss(1);
-    }
-
-    // MECÁNICA DE PARRY / CONTRAATAQUE: Reflejar proyectiles cercanos de vuelta hacia el Jefe (rompe su escudo)
-    let parried = false;
-    for (let i = boss.shots.length - 1; i >= 0; i--) {
-      const s = boss.shots[i];
-      if (hy(s.x - drone.x, s.y - drone.y) < 78) {
-        if (boss.active) {
-          const ang = M.atan2(boss.y - s.y, boss.x - s.x);
-          playerShots.push({ x: s.x, y: s.y, vx: cs(ang) * 3.8, vy: sn(ang) * 3.8, parry: 1 });
-          parried = true;
-        }
-        boss.shots.splice(i, 1);
-      }
-    }
-    if (parried) {
-      drone.slamCd = fl(drone.slamCd * 0.6);
-      drone.pressure = mn(drone.maxPsi, drone.pressure + 15);
-      bannerText = '!PARRY REFLEJADO CRITICO!';
-      levelBannerTimer = 55;
-      sfxTone(660, 1320, 0.16, 'square', 0.14);
-    }
-
-    if (!boss.active) {
-      for (let c = 0; c < activeChunks.length; c++) {
-        const ch = activeChunks[c];
-        for (let i = 0; i < ch.gears.length; i++) {
-          const g = ch.gears[i];
-          if (hy(g.x - drone.x, g.y - drone.y) < 75) {
-            g.omega *= 0.25;
-            g.vx = 0;
-          }
-        }
-        for (let i = 0; i < ch.vents.length; i++) {
-          const v = ch.vents[i];
-          if (ab(v.y - drone.y) < 65) v.stun = 120;
-        }
-      }
-    }
-  }
-
-  // =========================================================================
-  // 7. GENERACIÓN PROCEDIMENTAL DE CHUNKS
-  // =========================================================================
-  function generateChunk(chunkIdx) {
-    setSeed((seed + chunkIdx * 7919) >>> 0);
-    const yBottom = H - chunkIdx * H;
-    const yTop = yBottom - H;
-
-    const platforms = [
-      { x1: 0, y1: yTop, x2: WALL_LEFT, y2: yBottom, cool: 0, wall: true },
-      { x1: WALL_RIGHT, y1: yTop, x2: W, y2: yBottom, cool: 0, wall: true }
-    ];
-    const gears = [];
-    const vents = [];
-    const gates = [];
-    const cores = [];
-
-    if (chunkIdx === 0) {
-      platforms.push({ x1: 68, y1: 194, x2: 188, y2: 205, w: 120, cool: 1, wall: false, vx: 0 });
-    }
-
-    const numRows = 5;
-    const rowStep = H / numRows;
-
-    for (let r = 0; r < numRows; r++) {
-      if (chunkIdx === 0 && r === 0) continue;
-
-      const py = fl(yBottom - (r + 0.75) * rowStep + lcgRange(-4, 4));
-      const hMeters = getHeightMetersAtY(py);
-      const lv = getDiffAtMeters(hMeters);
-      const bIdx = getBiomeIndex();
-
-      const minW = mx(28, 70 - (lv - 1) * 4 - bIdx * 2);
-      const maxW = mx(38, 86 - (lv - 1) * 5 - bIdx * 2);
-      const beamW = fl(lcgRange(minW, maxW));
-
-      const slot = (chunkIdx * numRows + r) % 3;
-      const minX = WALL_LEFT + 12;
-      const maxX = WALL_RIGHT - beamW - 12;
-      const px = slot === 0
-        ? fl(lcgRange(minX, minX + (maxX - minX) * 0.4))
-        : slot === 1
-        ? fl(lcgRange(minX + (maxX - minX) * 0.6, maxX))
-        : fl(lcgRange(minX + (maxX - minX) * 0.25, minX + (maxX - minX) * 0.75));
-
-      const coolFactor = lv >= 4 && r % 2 === 1 ? 0.65 : 1.0;
-      const moveSpeed = lv >= 2 && r === 2 && lcg() > 0.35
-        ? (lcg() > 0.5 ? 1 : -1) * mn(0.95, 0.35 + lv * 0.06)
-        : 0;
-
-      const isFragile = !moveSpeed && lv >= 2 && r === 4 && lcg() > 0.45;
-      const hasSpring = !isFragile && r === 1 && lcg() > 0.55;
-
-      platforms.push({
-        x1: px,
-        y1: py,
-        x2: px + beamW,
-        y2: py + 9,
-        w: beamW,
-        cool: isFragile ? 0.4 : coolFactor,
-        wall: false,
-        vx: moveSpeed,
-        minX: WALL_LEFT + 8,
-        maxX: WALL_RIGHT - 8,
-        fragile: isFragile,
-        crumble: 0,
-        broken: 0,
-        spring: hasSpring
-      });
-
-      if ((chunkIdx > 0 || r >= 3) && r === 1 && lcg() > 0.25) {
-        const fromLeft = px + beamW * 0.5 > W * 0.5;
-        const barrierLen = mn(94, fl(lcgRange(46, 58 + lv * 4)));
-        const by = py - 22;
-        platforms.push({
-          x1: fromLeft ? WALL_LEFT : WALL_RIGHT - barrierLen,
-          y1: by,
-          x2: fromLeft ? WALL_LEFT + barrierLen : WALL_RIGHT,
-          y2: by + 10,
-          cool: 0,
-          wall: true,
-          barrier: true
-        });
-      }
-
-      if ((chunkIdx > 0 || r >= 2) && r === 3) {
-        const fromLeft = lcg() > 0.5;
-        const maxExt = mn(136, fl(lcgRange(82, 98 + lv * 4)));
-        const period = mx(110, 200 - lv * 10);
-        const gy = py - 24;
-        gates.push({
-          fromLeft,
-          y1: gy,
-          y2: gy + 10,
-          maxLen: maxExt,
-          curLen: 20,
-          period,
-          phase: fl(lcgRange(0, period)),
-          state: 0
-        });
-        if (lcg() > 0.35) {
-          cores.push({ x: fromLeft ? WALL_LEFT + maxExt - 14 : WALL_RIGHT - maxExt + 14, y: gy + 5, taken: false });
-        }
-      }
-
-      if ((chunkIdx > 0 || r >= 2) && (r === 2 || (lv >= 3 && r === 4))) {
-        if ((lv >= 4 || bIdx >= 1) && r === 4) {
-          const gapCenter = fl(lcgRange(74, W - 74));
-          const rad = 12;
-          const spd = 0.05 + lv * 0.006;
-          gears.push(
-            { x: mx(WALL_LEFT + 22, gapCenter - 40), y: py - 22, R: rad, angle: 0, omega: spd, teeth: 10 },
-            { x: mn(WALL_RIGHT - 22, gapCenter + 40), y: py - 22, R: rad, angle: 0.3, omega: -spd, teeth: 10 }
-          );
-          cores.push({ x: gapCenter, y: py - 22, taken: false });
-        } else {
-          const gx = px + beamW * 0.5 < W * 0.5
-            ? fl(lcgRange(W * 0.56, WALL_RIGHT - 26))
-            : fl(lcgRange(WALL_LEFT + 26, W * 0.44));
-          const patrol = lv >= 3 ? (lcg() > 0.5 ? 0.45 : -0.45) : 0;
-          const rad = fl(lcgRange(11, 14));
-          gears.push({
-            x: gx,
-            y: py - 22,
-            R: rad,
-            angle: lcgRange(0, 6.28),
-            omega: (lcg() > 0.5 ? 1 : -1) * (0.045 + lv * 0.006),
-            teeth: 10,
-            vx: patrol,
-            minX: WALL_LEFT + 24,
-            maxX: WALL_RIGHT - 24
-          });
-          if (lcg() > 0.3) {
-            cores.push({ x: gx + (gx < W * 0.5 ? rad + 13 : -(rad + 13)), y: py - 22, taken: false });
-          }
-        }
-      }
-
-      if ((lv >= 2 || bIdx >= 1) && r === 0 && lcg() > 0.35) {
-        const leftSide = lcg() > 0.5;
-        vents.push({
-          x: leftSide ? WALL_LEFT : WALL_RIGHT,
-          y: py - 20,
-          dir: leftSide ? 1 : -1,
-          period: mx(100, fl(lcgRange(145, 185) - lv * 7)),
-          phase: fl(lcgRange(0, 120)),
-          len: fl(lcgRange(55, 82)),
-          stun: 0
-        });
-      }
-    }
-
-    return { idx: chunkIdx, yTop, yBottom, platforms, gears, vents, gates, cores };
-  }
-
-  function updateChunksWindow() {
-    const centerChunkIdx = mx(0, fl((H - (camY + H * 0.5)) / H));
-    if (activeChunks.length === 0) {
-      activeChunks = [generateChunk(centerChunkIdx), generateChunk(centerChunkIdx + 1), generateChunk(centerChunkIdx + 2)];
-      topChunkIndex = centerChunkIdx + 2;
-      return;
-    }
-    while (centerChunkIdx + 1 > topChunkIndex) {
-      topChunkIndex++;
-      activeChunks.shift();
-      activeChunks.push(generateChunk(topChunkIndex));
-    }
-  }
-
-  // =========================================================================
-  // 8. CONTROLES, PAUSA RÁPIDA Y NAVEGACIÓN DEL MENÚ / TALLER / ASCENSOR
-  // =========================================================================
   const keys = {};
   let touchLeft = false;
   let touchRight = false;
 
-  window.addEventListener('keydown', (e) => {
-    const firstPress = !keys[e.code];
-    keys[e.code] = true;
+  const isHullUnlocked = (i) => i === 0 || maxLevelReached >= i || highScore >= [0, 100, 220, 360][i];
+  const isSkillUnlocked = (i) => i <= 1 || maxLevelReached >= i - 1 || highScore >= [0, 0, 100, 220][i];
+  const getHeightM = (wy) => mx(0, fl((200 - wy) / 12));
 
-    if (e.code === 'KeyM' && firstPress) muted = !muted;
-    if (e.code === 'KeyC' && firstPress) crtEnabled = !crtEnabled;
+  const setSeed = (s) => (rngState = s >>> 0 || 1);
+  const lcg = () => ((rngState = (1664525 * rngState + 1013904223) >>> 0) / 4294967296);
+  const lcgR = (a, b) => a + lcg() * (b - a);
+  const rollSeed = () => {
+    seed = ((rn() * 900000 + 100000) | 0);
+  };
 
-    // Pausa rápida con [P] o [Escape]
-    if ((e.code === 'KeyP' || e.code === 'Escape') && firstPress && (gameState === 1 || gameState === 3)) {
-      gameState = gameState === 1 ? 3 : 1;
-      sfxTone(340, gameState === 3 ? 220 : 520, 0.08, 'square', 0.07);
+  function editSeed() {
+    randomSeed = false;
+    let entered = null;
+    try {
+      if (typeof window.prompt === 'function') entered = window.prompt('Semilla numerica para Torre Infinita:', String(seed));
+    } catch (_) {}
+    if (entered !== null && /^\d+$/.test(entered.trim())) seed = parseInt(entered.trim(), 10) % 1000000 || 1;
+    else seed = (seed + 137) % 999999 || 1;
+    sfxTone(460, 690, 0.06, 'triangle', 0.07);
+  }
+
+  function showBanner(txt, col, dur) {
+    bannerText = txt;
+    bannerCol = col || PAL[6];
+    bannerTimer = dur || 120;
+  }
+
+  function spawnParticle(t, x, y, vx, vy, life, sz, col) {
+    const p = particles[poolIdx];
+    poolIdx = (poolIdx + 1) & (POOL_SIZE - 1);
+    p._on = 1;
+    p._t = t;
+    p._x = x;
+    p._y = y;
+    p._vx = vx;
+    p._vy = vy;
+    p._l = life;
+    p._s = sz || 2;
+    p._c = col || PAL[13];
+  }
+
+  function burst(x, y, n, sp, l, c1, c2) {
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * PI2;
+      spawnParticle(1, x, y, cs(a) * sp, sn(a) * sp, l, 2, i & 1 ? c2 || c1 : c1);
+    }
+  }
+
+  function stepBossShots(dt, grav, minY, msg) {
+    for (let i = bossShots.length - 1; i >= 0; i--) {
+      const s = bossShots[i];
+      s._x += s._vx * dt;
+      s._y += s._vy * dt;
+      if (grav && s._g) s._vy += s._g * dt;
+      if (grav && s._b && (s._x < WALL_L + s._r || s._x > WALL_R - s._r)) s._vx = -s._vx;
+      const ds = hy(drone.x - s._x, drone.y - s._y);
+      if (ds < drone.r + s._r) {
+        bossShots.splice(i, 1);
+        if (drone.shield <= 0) applyDamage(24, 1, msg);
+        continue;
+      } else if (ds < drone.r + s._r + 6) triggerGraze(s._x, s._y);
+      if (s._y > camY + H + 20 || s._y < camY - minY || s._x < WALL_L - 8 || s._x > WALL_R + 8) bossShots.splice(i, 1);
+    }
+  }
+
+  const pushShot = (x, y, vx, vy, r, g, b) => bossShots.push({ _x: x, _y: y, _vx: vx, _vy: vy, _r: r || 4, _g: g || 0, _b: b || 0 });
+
+  // =========================================================================
+  // 6. GENERACION DENSA DE NIVELES (5 FILAS/CHUNK, VAPOR, COMPUERTAS, ENEMIGOS)
+  // =========================================================================
+  function createChunk(chunkIdx, lvIdx, isDesigned) {
+    setSeed((seed + chunkIdx * 7919 + lvIdx * 131) >>> 0);
+    const yBottom = H - chunkIdx * H;
+    const yTop = yBottom - H;
+    const lv = LEVELS[lvIdx % 4];
+    const totalChunks = fl((lv._lenM * 12) / H);
+
+    const plats = [
+      { _x1: 0, _y1: yTop, _x2: WALL_L, _y2: yBottom, _wall: 1 },
+      { _x1: WALL_R, _y1: yTop, _x2: W, _y2: yBottom, _wall: 1 }
+    ];
+    const foes = [];
+    const saws = [];
+    const gates = [];
+    const vents = [];
+    const cores = [];
+    const rests = [];
+
+    if (chunkIdx === 0) plats.push({ _x1: 95, _y1: 194, _x2: 225, _y2: 205, _w: 130, _cool: 1, _vx: 0 });
+
+    const isRestChunk = isDesigned ? chunkIdx === 2 || chunkIdx === totalChunks - 2 : chunkIdx > 0 && chunkIdx % 4 === 0;
+    if (isRestChunk) {
+      const ry = fl(yBottom - 108);
+      plats.push({ _x1: 96, _y1: ry, _x2: 224, _y2: ry + 11, _w: 128, _cool: 1.5, _vx: 0, _rest: 1 });
+      rests.push({ _x: W * 0.5, _y: ry - 10, _used: 0 });
+    }
+
+    const rows = 5;
+    const step = H / rows;
+
+    for (let r = 0; r < rows; r++) {
+      if ((chunkIdx === 0 && r === 0) || (isRestChunk && r === 2)) continue;
+
+      const py = fl(yBottom - (r + 0.68) * step + lcgR(-3, 3));
+      const slot = (chunkIdx * 3 + r + lvIdx) % 3;
+      const beamW = isDesigned ? mx(46, 84 - lvIdx * 7 - (chunkIdx > totalChunks - 3 ? 6 : 0)) : mx(36, 80 - fl(chunkIdx * 1.2));
+      const minX = WALL_L + 12;
+      const maxX = WALL_R - beamW - 12;
+      const px = slot === 0
+        ? fl(lcgR(minX, minX + (maxX - minX) * 0.28))
+        : slot === 1
+        ? fl(lcgR(minX + (maxX - minX) * 0.68, maxX))
+        : fl(lcgR(minX + (maxX - minX) * 0.25, minX + (maxX - minX) * 0.72));
+
+      const vx = !isRestChunk && (r === 2 || r === 4) && (lvIdx >= 1 || chunkIdx >= 1) && lcg() > 0.35
+        ? (lcg() > 0.5 ? 1 : -1) * mn(1.05, 0.42 + lvIdx * 0.14)
+        : 0;
+      const fragile = !vx && lvIdx >= 2 && (r === 1 || r === 3) && lcg() > 0.42;
+      const spring = !fragile && ((lvIdx === 1 && (r & 1)) || ((r === 0 || r === 3) && lcg() > 0.48));
+
+      plats.push({
+        _x1: px, _y1: py, _x2: px + beamW, _y2: py + 9, _w: beamW,
+        _cool: fragile ? 0.5 : 1, _vx: vx, _frag: fragile ? 1 : 0, _cr: 0, _brk: 0, _spr: spring ? 1 : 0
+      });
+
+      // Bloques laterales de obstaculo / cobertura segun nivel
+      if ((chunkIdx > 0 || r >= 2) && (r === 1 || r === 3) && lcg() > 0.35) {
+        const leftSide = px + beamW * 0.5 > W * 0.5;
+        const bw = fl(lcgR(44, 62 + lvIdx * 6));
+        plats.push({ _x1: leftSide ? WALL_L : WALL_R - bw, _y1: py - 20, _x2: leftSide ? WALL_L + bw : WALL_R, _y2: py - 11, _wall: 1, _bar: 1 });
+      }
+
+      // Enemigos acordes al nivel (hasta 2 por chunk!)
+      if ((chunkIdx > 0 || r >= 2) && (r === 1 || r === 3) && lcg() > 0.3) {
+        foes.push({
+          _t: lvIdx % 4,
+          _x: lcgR(WALL_L + 36, WALL_R - 36),
+          _y: py - 16,
+          _vx: (lcg() > 0.5 ? 1 : -1) * (0.5 + lvIdx * 0.11),
+          _hp: lvIdx >= 2 ? 2 : 1,
+          _cd: fl(lcgR(35, 95)),
+          _stun: 0
+        });
+      }
+
+      // Sierras dentadas rotatorias V6
+      if ((chunkIdx > 0 || r >= 3) && (r === 2 || r === 4) && lcg() > 0.34) {
+        saws.push({
+          _x: fl(lcgR(WALL_L + 30, WALL_R - 30)),
+          _y: py - 15,
+          _r: 8,
+          _vx: (lcg() > 0.5 ? 1 : -1) * (0.48 + lvIdx * 0.13),
+          _ang: 0,
+          _omg: 0.16,
+          _stun: 0
+        });
+      }
+
+      // Valvulas laterales de vapor (Vents V6!)
+      if ((chunkIdx > 0 || r >= 3) && r === 2 && lcg() > 0.38) {
+        const dir = lcg() > 0.5 ? 1 : -1;
+        vents.push({
+          _x: dir > 0 ? WALL_L : WALL_R,
+          _y: py - 12,
+          _dir: dir,
+          _per: 155,
+          _ph: fl(lcgR(0, 155)),
+          _stun: 0
+        });
+      }
+
+      // Compuertas telescopicas temporizadas V6
+      if (chunkIdx >= 1 && (r === 0 || r === 4) && lcg() > 0.42) {
+        gates.push({ _x: fl(lcgR(WALL_L + 36, WALL_R - 90)), _y: py - 16, _w: 54, _per: 145, _ph: fl(lcgR(0, 145)), _stun: 0 });
+      }
+
+      // Nucleos dorados coleccionables (riesgo/recompensa)
+      if (lcg() > 0.36) cores.push({ _x: px + beamW * 0.5, _y: py - 12, _on: 1 });
+    }
+
+    return { _idx: chunkIdx, _yTop: yTop, _yBot: yBottom, _plats: plats, _foes: foes, _saws: saws, _gates: gates, _vents: vents, _cores: cores, _rests: rests };
+  }
+
+  function loadLevelWorld(lvIdx, preserveHp) {
+    currentLevel = lvIdx;
+    const lv = LEVELS[lvIdx % 4];
+    const hull = HULLS[selectedHull];
+
+    drone.x = W * 0.5;
+    drone.y = 184;
+    drone.vx = 0;
+    drone.vy = 0;
+    drone.theta = 0;
+    drone.maxHp = hull._hp;
+    drone.hp = preserveHp ? mn(drone.maxHp, drone.hp + 1) : hull._hp;
+    drone.invuln = 30;
+    drone.pressure = 100;
+    drone.maxPsi = 100;
+    drone.purge = 0;
+    drone.slamCd = 0;
+    drone.slamWaveR = 0;
+    drone.parryRing = 0;
+    drone.shield = 0;
+    drone.dashT = 0;
+
+    camY = 0;
+    lavaY = H + 75;
+    warnAlertLevel = 0;
+    boss.active = false;
+    bossShots = [];
+    playerShots = [];
+    seqStep = 0;
+    barCount = 0;
+    if (audioCtx) nextNoteTime = audioCtx.currentTime + 0.05;
+
+    for (let i = 0; i < POOL_SIZE; i++) particles[i]._on = 0;
+    activeChunks = [];
+
+    if (gameMode === 1) {
+      phase = 0;
+      levelGoalY = 120;
+      const ch = createChunk(0, lvIdx, true);
+      ch._foes = [];
+      ch._saws = [];
+      ch._gates = [];
+      ch._vents = [];
+      activeChunks.push(ch);
+      beginBossIntro(lvIdx);
       return;
     }
 
-    if (gameState !== 1 && firstPress) {
-      if (e.code === 'KeyT' || e.code === 'Tab') {
-        e.preventDefault();
-        menuTab = 1 - menuTab;
-        sfxTone(380, 560, 0.08, 'square', 0.07);
-      } else if (e.code === 'Digit1' && isHullUnlocked(0)) {
-        selectedHull = 0;
-        sfxTone(330, 440, 0.08, 'square', 0.07);
-      } else if (e.code === 'Digit2' && isHullUnlocked(1)) {
-        selectedHull = 1;
-        sfxTone(330, 520, 0.08, 'square', 0.07);
-      } else if (e.code === 'Digit3' && isHullUnlocked(2)) {
-        selectedHull = 2;
-        sfxTone(330, 600, 0.08, 'square', 0.07);
-      } else if (e.code === 'Digit4' && isHullUnlocked(3)) {
-        selectedHull = 3;
-        sfxTone(330, 680, 0.08, 'square', 0.07);
-      } else if (e.code === 'KeyQ' || e.code === 'KeyF') {
-        for (let k = 1; k <= 4; k++) {
-          const cand = (selectedSkill + k) & 3;
-          if (isSkillUnlocked(cand)) {
-            selectedSkill = cand;
-            sfxTone(440, 660, 0.08, 'triangle', 0.08);
+    if (gameMode === 0) {
+      levelGoalY = 200 - lv._lenM * 12;
+      const numChunks = M.ceil((lv._lenM * 12 + 120) / H);
+      for (let i = 0; i <= numChunks; i++) activeChunks.push(createChunk(i, lvIdx, true));
+      phase = 0;
+      showBanner(lv._name, PAL[6], 130);
+    } else {
+      topChunkIndex = 1;
+      for (let i = 0; i <= 2; i++) activeChunks.push(createChunk(i, 0, false));
+      nextBossMeters = 120;
+      phase = 0;
+      showBanner('TORRE INFINITA - SEMILLA ' + seed, PAL[10], 120);
+    }
+  }
+
+  function startGame() {
+    initAudio();
+    if (gameMode === 2 && randomSeed) rollSeed();
+    score = 0;
+    maxMeters = 0;
+    grazeCombo = 0;
+    grazeTimer = 0;
+    runSeconds = 0;
+    ngPlus = 0;
+    drone.cores = 0;
+    drone.overdrive = 0;
+    deathReason = 'CONSUMIDO POR EL MAGMA';
+
+    loadLevelWorld(gameMode === 0 ? startLevel : 0, false);
+    keys['Space'] = false;
+    keys['Enter'] = false;
+    gameState = 1;
+    playJingle(3);
+  }
+
+  // =========================================================================
+  // 7. TRANSICIONES DE JEFE, COMBATE Y HABILIDADES BALANCEADAS
+  // =========================================================================
+  function beginBossIntro(lvIdx) {
+    boss.type = lvIdx % 4;
+    boss.active = true;
+    boss.arenaY = camY;
+    boss.x = W * 0.5;
+    boss.baseY = boss.arenaY + 62;
+    boss.y = boss.arenaY - 28;
+    boss.vx = 1.08 + boss.type * 0.15;
+    boss.r = 17;
+    boss.maxHp = 8 + boss.type * 3 + ngPlus * 4;
+    boss.hp = boss.maxHp;
+    boss.phaseTimer = 0;
+    boss.invuln = 0;
+    boss.shield = 0;
+    bossShots = [];
+    playerShots = [];
+
+    if (drone.y < boss.arenaY + 130) drone.y = boss.arenaY + 165;
+    drone.vx = 0;
+    drone.vy = 0;
+    lavaY = mx(lavaY, boss.arenaY + H + 38);
+
+    phase = 1;
+    phaseTimer = 120;
+    seqStep = 0;
+    barCount = 0;
+    if (audioCtx) nextNoteTime = audioCtx.currentTime + 0.05;
+    playJingle(2);
+  }
+
+  function defeatBoss() {
+    phase = 3;
+    phaseTimer = 110;
+    bossShots = [];
+    score += 1000 + boss.type * 500;
+    if (currentLevel + 1 > maxLevelReached) {
+      maxLevelReached = currentLevel + 1;
+      saveProg();
+    }
+    playJingle(1);
+    screenShake = 14;
+    showBanner('JEFE DESTRUIDO! +1000 PTS', PAL[6], 130);
+  }
+
+  function damageBoss(dmg, isParry) {
+    if (phase !== 2 || boss.invuln > 0) return;
+    if (boss.shield > 0) {
+      if (!isParry && drone.overdrive <= 0) {
+        sfxTone(220, 150, 0.08, 'triangle', 0.09);
+        showBanner('ESCUDO! USA PARRY O ATACA AL NUCLEO', PAL[11], 75);
+        boss.invuln = 14;
+        return;
+      }
+      boss.shield = 0;
+      showBanner('ESCUDO ROTO POR PARRY!', PAL[10], 90);
+    }
+
+    boss.hp = mx(0, boss.hp - dmg);
+    boss.invuln = isParry ? 18 : 12;
+    screenShake = mx(screenShake, isParry ? 10 : 6);
+    score += dmg * 150;
+    sfxTone(460, 140, 0.16, 'sawtooth', 0.13);
+
+    burst(boss.x, boss.y, 10, 2.1, 18, isParry ? PAL[10] : PAL[9]);
+    if (boss.hp <= 0) defeatBoss();
+  }
+
+  function applyDamage(invT, hpLoss, reason) {
+    if (drone.invuln > 0 || drone.overdrive > 0 || drone.dashT > 0 || (phase !== 0 && phase !== 2)) return;
+    drone.invuln = mx(invT, 45);
+    drone.hp = mx(0, drone.hp - hpLoss);
+    grazeCombo = 0;
+    damageFlash = 16;
+    screenShake = 11;
+    sfxTone(190, 50, 0.25, 'sawtooth', 0.16);
+    if (drone.hp <= 0) {
+      deathReason = reason || 'NAVE DESTRUIDA';
+      triggerGameOver();
+    }
+  }
+
+  function triggerGraze(ox, oy) {
+    if (drone.grazeCd > 0) return;
+    drone.grazeCd = 16;
+    grazeCombo = mn(8, grazeCombo + 1);
+    grazeTimer = 210;
+    drone.pressure = mn(drone.maxPsi, drone.pressure + HULLS[selectedHull]._grz + grazeCombo * 2);
+    score += 35 * grazeCombo;
+    sfxTone(740, 1120, 0.05, 'triangle', 0.05);
+    spawnParticle(1, (drone.x + ox) * 0.5, (drone.y + oy) * 0.5, (rn() - 0.5) * 2, -0.9, 14, 2, PAL[10]);
+  }
+
+  function triggerActiveSkill() {
+    if ((phase !== 0 && phase !== 2) || drone.slamCd > 0 || drone.purge > 0) return;
+    const sk = SKILLS[selectedSkill];
+    if (phase !== 2 && drone.overdrive <= 0 && drone.pressure < sk._cost) {
+      sfxTone(150, 100, 0.08, 'square', 0.08);
+      return;
+    }
+
+    if (phase !== 2 && drone.overdrive <= 0) drone.pressure -= sk._cost;
+    drone.slamCd = sk._cd;
+
+    if (selectedSkill === 0) {
+      // 0: ESCUDO PARRY — UNICA con Parry (radio estricto 28px)
+      drone.parryRing = 14;
+      drone.shield = mx(drone.shield, 18);
+      sfxTone(460, 880, 0.12, 'triangle', 0.11);
+
+      let reflected = 0;
+      for (let i = bossShots.length - 1; i >= 0; i--) {
+        const s = bossShots[i];
+        if (hy(s._x - drone.x, s._y - drone.y) <= PARRY_RADIUS + s._r) {
+          bossShots.splice(i, 1);
+          reflected++;
+          if (phase === 2) {
+            const ang = M.atan2(boss.y - s._y, boss.x - s._x);
+            playerShots.push({ _x: s._x, _y: s._y, _vx: cs(ang) * 4.3, _vy: sn(ang) * 4.3, _parry: 1, _dmg: 2 });
+          }
+        }
+      }
+      if (reflected > 0) {
+        drone.pressure = mn(drone.maxPsi, drone.pressure + 20);
+        drone.slamCd = fl(drone.slamCd * 0.45);
+        drone.shield = 28;
+        screenShake = 8;
+        score += 200 * reflected;
+        showBanner('PARRY PERFECTO X' + reflected + '!', PAL[10], 75);
+        sfxTone(620, 1280, 0.14, 'square', 0.13);
+        burst(drone.x, drone.y, 12, 2.6, 18, PAL[10]);
+      }
+    } else if (selectedSkill === 1) {
+      // 1: CANON TRIPLE — 3 rayos perforantes (NO hace parry)
+      sfxTone(680, 260, 0.11, 'sawtooth', 0.1);
+      for (let k = -1; k <= 1; k++) {
+        playerShots.push({ _x: drone.x + k * 4, _y: drone.y - 6, _vx: k * 0.9, _vy: -3.8, _parry: 0, _dmg: 1 });
+      }
+      drone.vy = mn(drone.vy + 0.25, MAX_VY_DOWN);
+    } else if (selectedSkill === 2) {
+      // 2: IMPULSO RAYO — Dash ascendente invulnerable (NO hace parry)
+      drone.dashT = 18;
+      drone.invuln = mx(drone.invuln, 20);
+      drone.vy = -3.55;
+      screenShake = 6;
+      sfxTone(320, 960, 0.15, 'square', 0.11);
+      for (let i = 0; i < 10; i++) {
+        spawnParticle(1, drone.x + (rn() - 0.5) * 10, drone.y + 4, (rn() - 0.5) * 1.8, 1.4, 16, 2, PAL[11]);
+      }
+    } else {
+      // 3: ONDA SISMICA — Aturde enemigos/sierras/vapores 64px y frena (NO hace parry)
+      drone.slamWaveR = 6;
+      drone.vy = mn(0, drone.vy * 0.25);
+      screenShake = 7;
+      sfxTone(240, 75, 0.18, 'sawtooth', 0.12);
+      for (let c = 0; c < activeChunks.length; c++) {
+        const ch = activeChunks[c];
+        [ch._foes, ch._saws, ch._gates, ch._vents].forEach((arr) => {
+          for (let i = 0; i < arr.length; i++) {
+            const it = arr[i];
+            if (hy((it._x || drone.x) - drone.x, it._y - drone.y) < 68) it._stun = 150;
+          }
+        });
+      }
+      if (phase === 2 && hy(boss.x - drone.x, boss.y - drone.y) < 68) damageBoss(1, false);
+    }
+  }
+
+  function triggerGameOver() {
+    gameState = 2;
+    menuTab = 0;
+    screenShake = 14;
+    if (maxMeters > highScore) {
+      highScore = maxMeters;
+      saveProg();
+    }
+    burst(drone.x, drone.y, 26, 2.2, 24, PAL[6], PAL[9]);
+    sfxTone(170, 34, 0.42, 'sawtooth', 0.17);
+  }
+
+  // =========================================================================
+  // 8. FISICA, COLISIONES, ENEMIGOS, JEFES Y TRANSICIONES (240 FPS)
+  // =========================================================================
+  function resolveCircleAABB(p, dt) {
+    if (p._brk > 0) return false;
+    const xn = mx(p._x1, mn(drone.x, p._x2));
+    const yn = mx(p._y1, mn(drone.y, p._y2));
+    const dx = drone.x - xn;
+    const dy = drone.y - yn;
+    const d2 = dx * dx + dy * dy;
+    if (d2 >= drone.r * drone.r) return false;
+
+    const d = M.sqrt(d2) || 0.001;
+    const nx = dx / d;
+    const ny = dy / d;
+    drone.x += nx * (drone.r - d);
+    drone.y += ny * (drone.r - d);
+
+    if (p._spr && ny < -0.6 && ab(drone.x - (p._x1 + p._x2) * 0.5) < 13) {
+      drone.vy = MAX_VY_UP * 1.44;
+      drone.pressure = mn(drone.maxPsi, drone.pressure + 16);
+      sfxTone(200, 740, 0.14, 'triangle', 0.1);
+      for (let i = 0; i < 6; i++) spawnParticle(0, drone.x, p._y1, (rn() - 0.5) * 1.5, 1.3, 14, 2, PAL[10]);
+      return true;
+    }
+
+    const vn = drone.vx * nx + drone.vy * ny;
+    if (vn < 0) {
+      if (!p._wall && ny < -0.65 && ab(drone.vy) < 1.35 && !drone.leftOn && !drone.rightOn) {
+        drone.vy = 0;
+        drone.vx = drone.vx * (currentLevel === 2 ? 0.94 : 0.74) + (p._vx || 0) * 0.25;
+        drone.grounded = true;
+      } else {
+        drone.vx -= (1 + RESTITUTION) * vn * nx;
+        drone.vy -= (1 + RESTITUTION) * vn * ny;
+        if (-vn > 0.7) sfxTone(220, 90, 0.05, 'triangle', 0.05);
+      }
+    }
+
+    if (!p._wall && ny < -0.65) {
+      drone.cooling = true;
+      drone.pressure = mn(drone.maxPsi, drone.pressure + 1.05 * (p._cool || 1) * dt);
+      if (p._frag && p._cr <= 0) p._cr = 38;
+    }
+    return true;
+  }
+
+  function updateBossCombat(dt) {
+    const enr = boss.hp <= boss.maxHp >> 1 ? 1.28 : 1.0;
+    boss.phaseTimer += dt;
+    if (boss.invuln > 0) boss.invuln = mx(0, boss.invuln - dt);
+
+    if (boss.type >= 1 && boss.shield <= 0 && ((elapsedTime * 10) | 0) % 75 === 0 && rn() < 0.05 * dt) boss.shield = 135;
+    if (boss.shield > 0) boss.shield = mx(0, boss.shield - dt);
+
+    const pt = boss.type;
+    if (pt === 0) {
+      boss.x = W * 0.5 + sn(elapsedTime * 1.55 * enr) * 76;
+      boss.y = boss.baseY + sn(elapsedTime * 3.1) * 10;
+      if (boss.phaseTimer > 64 / enr) {
+        boss.phaseTimer = 0;
+        const ang = M.atan2(drone.y - boss.y, drone.x - boss.x);
+        for (let k = -1; k <= 1; k++) pushShot(boss.x, boss.y + 8, cs(ang + k * 0.26) * 1.6 * enr, sn(ang + k * 0.26) * 1.6 * enr);
+        sfxTone(420, 150, 0.1, 'square', 0.08);
+      }
+    } else if (pt === 1) {
+      boss.x += boss.vx * enr * dt;
+      if (boss.x < WALL_L + 30 || boss.x > WALL_R - 30) boss.vx = -boss.vx;
+      boss.y = boss.baseY - ab(sn(elapsedTime * 2.8)) * 18;
+      if (boss.phaseTimer > 54 / enr) {
+        boss.phaseTimer = 0;
+        pushShot(boss.x, boss.y + 8, 1.55 * enr, 0.75, 4, 0.025, 1);
+        pushShot(boss.x, boss.y + 8, -1.55 * enr, 0.75, 4, 0.025, 1);
+        sfxTone(540, 260, 0.1, 'triangle', 0.08);
+      }
+    } else if (pt === 2) {
+      boss.x = W * 0.5 + sn(elapsedTime * 1.3 * enr) * 62;
+      boss.y = boss.baseY + cs(elapsedTime * 2.2) * 12;
+      if (boss.phaseTimer > 56 / enr) {
+        boss.phaseTimer = 0;
+        const nShots = boss.hp <= boss.maxHp >> 1 ? 8 : 6;
+        for (let k = 0; k < nShots; k++) {
+          const a = elapsedTime * 2.1 + (k * PI2) / nShots;
+          pushShot(boss.x, boss.y, cs(a) * 1.48 * enr, sn(a) * 1.48 * enr);
+        }
+        sfxTone(760, 320, 0.12, 'sine', 0.08);
+      }
+    } else {
+      boss.x = W * 0.5 + sn(elapsedTime * 1.9 * enr) * 86;
+      boss.y = boss.baseY + sn(elapsedTime * 3.8) * 14;
+      if (boss.phaseTimer > 52 / enr) {
+        boss.phaseTimer = 0;
+        const ang = M.atan2(drone.y - boss.y, drone.x - boss.x);
+        pushShot(boss.x, boss.y, cs(ang) * 2.1 * enr, sn(ang) * 2.1 * enr, 5);
+        for (let k = 0; k < 4; k++) {
+          const a = ang + 0.4 + (k * PI2) / 4;
+          pushShot(boss.x, boss.y, cs(a) * 1.4 * enr, sn(a) * 1.4 * enr, 4, 0, 1);
+        }
+        sfxTone(880, 240, 0.13, 'sawtooth', 0.09);
+      }
+    }
+
+    const db = hy(drone.x - boss.x, drone.y - boss.y) || 0.001;
+    if (db <= drone.r + boss.r) {
+      const nx = (drone.x - boss.x) / db;
+      const ny = (drone.y - boss.y) / db;
+      drone.x = boss.x + nx * (drone.r + boss.r + 2);
+      drone.y = boss.y + ny * (drone.r + boss.r + 2);
+      drone.vx = nx * 1.8;
+      drone.vy = ny * 1.8;
+      if (drone.overdrive > 0 || drone.dashT > 0) damageBoss(1, false);
+      else applyDamage(30, 1, 'APLASTADO POR ' + LEVELS[currentLevel % 4]._boss);
+    } else if (db <= drone.r + boss.r + 6) {
+      triggerGraze(boss.x, boss.y);
+    }
+
+    stepBossShots(dt, 1, 50, 'ABATIDO EN COMBATE');
+  }
+
+  function advanceAfterBoss() {
+    if (gameMode === 2) {
+      boss.active = false;
+      phase = 0;
+      nextBossMeters += 140;
+      currentLevel = (currentLevel + 1) % 4;
+      drone.hp = mn(drone.maxHp, drone.hp + 1);
+      if (activeChunks.length > 0) {
+        activeChunks[activeChunks.length - 1]._plats.push({ _x1: mx(WALL_L + 10, drone.x - 45), _y1: drone.y + 14, _x2: mn(WALL_R - 10, drone.x + 45), _y2: drone.y + 23, _w: 90, _cool: 1, _vx: 0 });
+      }
+      showBanner('ZONA SIGUIENTE! +1 HP', PAL[14], 110);
+      return;
+    }
+    if (currentLevel < 3) loadLevelWorld(currentLevel + 1, true);
+    else {
+      phase = 5;
+      phaseTimer = 0;
+      saveProg();
+      playJingle(1);
+    }
+  }
+
+  function updatePhysics(dt) {
+    elapsedTime += dt / 60;
+    runSeconds += dt / 60;
+    if (bannerTimer > 0) bannerTimer = mx(0, bannerTimer - dt);
+    if (grazeTimer > 0) {
+      grazeTimer = mx(0, grazeTimer - dt);
+      if (grazeTimer <= 0) grazeCombo = 0;
+    }
+
+    if (phase === 1) {
+      phaseTimer -= dt;
+      boss.y += (boss.baseY - boss.y) * 0.08 * dt;
+      camY += (boss.arenaY - camY) * 0.14 * dt;
+      if (phaseTimer <= 0) {
+        phase = 2;
+        seqStep = 0;
+        barCount = 0;
+        if (audioCtx) nextNoteTime = audioCtx.currentTime + 0.04;
+      }
+      return;
+    }
+    if (phase === 3) {
+      phaseTimer -= dt;
+      if (((phaseTimer * 0.6) | 0) % 5 === 0 && rn() < 0.55 * dt) {
+        const bx = boss.x + (rn() - 0.5) * 26;
+        const by = boss.y + (rn() - 0.5) * 20;
+        for (let k = 0; k < 5; k++) {
+          const a = rn() * PI2;
+          spawnParticle(1, bx, by, cs(a) * 2.2, sn(a) * 2.2, 22, 3, k & 1 ? PAL[6] : PAL[9]);
+        }
+        sfxTone(260, 70, 0.09, 'sawtooth', 0.07);
+      }
+      if (phaseTimer <= 0) {
+        phase = 4;
+        phaseTimer = 175;
+      }
+      return;
+    }
+    if (phase === 4) {
+      phaseTimer -= dt;
+      if (phaseTimer <= 0) advanceAfterBoss();
+      return;
+    }
+    if (phase === 5) return;
+
+    if (drone.invuln > 0) drone.invuln = mx(0, drone.invuln - dt);
+    if (drone.shield > 0) drone.shield = mx(0, drone.shield - dt);
+    if (drone.parryRing > 0) drone.parryRing = mx(0, drone.parryRing - dt);
+    if (drone.dashT > 0) drone.dashT = mx(0, drone.dashT - dt);
+    if (drone.grazeCd > 0) drone.grazeCd = mx(0, drone.grazeCd - dt);
+    if (drone.slamCd > 0) drone.slamCd = mx(0, drone.slamCd - dt);
+    if (drone.slamWaveR > 0) {
+      drone.slamWaveR += 3.6 * dt;
+      if (drone.slamWaveR > 66) drone.slamWaveR = 0;
+    }
+
+    const hull = HULLS[selectedHull];
+    const wantL = !!(keys['ArrowLeft'] || keys['KeyA'] || touchLeft);
+    const wantR = !!(keys['ArrowRight'] || keys['KeyD'] || touchRight);
+
+    if (phase === 2 || drone.overdrive > 0) {
+      if (drone.overdrive > 0) drone.overdrive = mx(0, drone.overdrive - dt);
+      drone.pressure = drone.maxPsi;
+      drone.purge = 0;
+    }
+
+    if (drone.purge > 0) {
+      drone.purge = mx(0, drone.purge - dt);
+      drone.leftOn = false;
+      drone.rightOn = false;
+      if (rn() < 0.25 * dt) spawnParticle(0, drone.x, drone.y - 5, (rn() - 0.5) * 0.7, -0.8, 16, 2, PAL[13]);
+      if (drone.purge <= 0) drone.pressure = 42;
+    } else {
+      drone.leftOn = wantL;
+      drone.rightOn = wantR;
+      const act = (drone.leftOn ? 1 : 0) + (drone.rightOn ? 1 : 0);
+      if (phase !== 2 && act > 0 && drone.overdrive <= 0) {
+        drone.pressure = mx(0, drone.pressure - 0.24 * act * hull._psi * dt);
+        if (drone.pressure <= 0) {
+          drone.purge = 62;
+          screenShake = 5;
+          sfxTone(420, 110, 0.28, 'sawtooth', 0.12);
+        }
+      } else if (phase !== 2 && !drone.grounded && drone.pressure < drone.maxPsi) {
+        drone.pressure = mn(drone.maxPsi, drone.pressure + 0.085 * dt);
+      }
+    }
+
+    const boost = drone.overdrive > 0 ? 1.48 : 1.0;
+    let ax = currentLevel === 2 && phase === 0 ? sn(elapsedTime * 1.8) * 0.012 : 0;
+    let ay = 0;
+    if (drone.leftOn) {
+      ax += THRUST_X * hull._tx * boost;
+      ay += THRUST_Y * hull._ty * boost;
+      if (rn() < 0.75 * dt) spawnParticle(0, drone.x - 5, drone.y + 4, -0.6, 1.1, 12, 2, PAL[13]);
+    }
+    if (drone.rightOn) {
+      ax -= THRUST_X * hull._tx * boost;
+      ay += THRUST_Y * hull._ty * boost;
+      if (rn() < 0.75 * dt) spawnParticle(0, drone.x + 5, drone.y + 4, 0.6, 1.1, 12, 2, PAL[13]);
+    }
+
+    if (drone.leftOn || drone.rightOn) {
+      if (steamCooldown <= 0) {
+        sfxSteam(drone.leftOn && drone.rightOn);
+        steamCooldown = 5;
+      }
+    }
+    if (steamCooldown > 0) steamCooldown -= dt;
+
+    const dragF = M.pow(DRAG, dt);
+    drone.vx = mx(-MAX_VX, mn(MAX_VX, (drone.vx + ax * dt) * dragF));
+    drone.vy = mx(drone.dashT > 0 ? -3.6 : MAX_VY_UP, mn(MAX_VY_DOWN, (drone.vy + (GRAVITY + ay) * dt) * dragF));
+    drone.x += drone.vx * dt;
+    drone.y += drone.vy * dt;
+    drone.theta = drone.vx * 0.12;
+    drone.cooling = false;
+    drone.grounded = false;
+
+    for (let i = playerShots.length - 1; i >= 0; i--) {
+      const ps = playerShots[i];
+      ps._x += ps._vx * dt;
+      ps._y += ps._vy * dt;
+      if (phase === 2 && hy(ps._x - boss.x, ps._y - boss.y) < boss.r + 6) {
+        playerShots.splice(i, 1);
+        damageBoss(ps._dmg, !!ps._parry);
+        continue;
+      }
+      if (ps._y < camY - 40 || ps._y > camY + H + 30 || ps._x < WALL_L || ps._x > WALL_R) playerShots.splice(i, 1);
+    }
+
+    if (phase === 2) {
+      if (drone.x < WALL_L + drone.r) {
+        drone.x = WALL_L + drone.r;
+        drone.vx = ab(drone.vx) * 0.5;
+      }
+      if (drone.x > WALL_R - drone.r) {
+        drone.x = WALL_R - drone.r;
+        drone.vx = -ab(drone.vx) * 0.5;
+      }
+      if (drone.y < boss.arenaY + 48) {
+        drone.y = boss.arenaY + 48;
+        drone.vy = mx(0, drone.vy);
+      }
+      if (drone.y > boss.arenaY + H - 18) {
+        drone.y = boss.arenaY + H - 18;
+        drone.vy = -1.95;
+        sfxTone(300, 560, 0.08, 'triangle', 0.08);
+      }
+      updateBossCombat(dt);
+      return;
+    }
+
+    const lv = LEVELS[currentLevel % 4];
+    lavaY = mn(lavaY - lv._lavaSpd * (1 + ngPlus * 0.15) * dt, drone.y + H * 1.1);
+    if (drone.y + drone.r >= lavaY) {
+      deathReason = 'CONSUMIDO POR EL MAGMA';
+      triggerGameOver();
+      return;
+    }
+
+    for (let c = 0; c < activeChunks.length; c++) {
+      const ch = activeChunks[c];
+      if (ch._yBot < camY - 120 || ch._yTop > camY + H + 120) continue;
+
+      for (let i = 0; i < ch._plats.length; i++) {
+        const p = ch._plats[i];
+        if (p._vx) {
+          p._x1 += p._vx * dt;
+          p._x2 += p._vx * dt;
+          if (p._x1 < WALL_L + 8) {
+            p._x1 = WALL_L + 8;
+            p._x2 = p._x1 + p._w;
+            p._vx = ab(p._vx);
+          } else if (p._x2 > WALL_R - 8) {
+            p._x2 = WALL_R - 8;
+            p._x1 = p._x2 - p._w;
+            p._vx = -ab(p._vx);
+          }
+        }
+        if (p._cr > 0) {
+          p._cr -= dt;
+          if (p._cr <= 0) p._brk = 180;
+        } else if (p._brk > 0) p._brk -= dt;
+        resolveCircleAABB(p, dt);
+      }
+
+      for (let i = 0; i < ch._rests.length; i++) {
+        const rs = ch._rests[i];
+        if (hy(drone.x - rs._x, drone.y - rs._y) < 20) {
+          drone.pressure = drone.maxPsi;
+          drone.purge = 0;
+          if (!rs._used) {
+            rs._used = 1;
+            if (drone.hp < drone.maxHp) drone.hp++;
+            score += 250;
+            showBanner('ESTACION: +1 HP Y PSI AL 100%', PAL[14], 110);
+            playJingle(0);
+            burst(rs._x, rs._y, 10, 1.6, 20, PAL[14]);
+          }
+        }
+      }
+
+      for (let i = 0; i < ch._cores.length; i++) {
+        const co = ch._cores[i];
+        if (co._on && hy(drone.x - co._x, drone.y - co._y) < drone.r + 6) {
+          co._on = 0;
+          drone.cores++;
+          score += 100;
+          if (drone.cores >= 3) {
+            drone.cores = 0;
+            drone.overdrive = 220;
+            showBanner('!OVERDRIVE ACTIVADO!', PAL[6], 100);
+            sfxTone(440, 1100, 0.25, 'square', 0.12);
+          } else sfxTone(660, 990, 0.08, 'triangle', 0.09);
+        }
+      }
+
+      for (let i = 0; i < ch._gates.length; i++) {
+        const gt = ch._gates[i];
+        if (gt._stun > 0) {
+          gt._stun -= dt;
+          continue;
+        }
+        const cyc = (elapsedTime * 60 + gt._ph) % gt._per;
+        if (cyc >= 102 && cyc < 138 && ab(drone.y - gt._y) < drone.r + 3 && drone.x > gt._x && drone.x < gt._x + gt._w) {
+          applyDamage(30, 1, 'CORTADO POR COMPUERTA');
+        }
+      }
+
+      for (let i = 0; i < ch._vents.length; i++) {
+        const vt = ch._vents[i];
+        if (vt._stun > 0) {
+          vt._stun -= dt;
+          continue;
+        }
+        const cyc = (elapsedTime * 60 + vt._ph) % vt._per;
+        if (cyc >= 106 && cyc < 144 && ab(drone.y - vt._y) < 10) {
+          const dist = (drone.x - vt._x) * vt._dir;
+          if (dist > 0 && dist < 56) {
+            drone.vx += vt._dir * 0.22 * dt;
+            if (dist < 28) applyDamage(26, 1, 'QUEMADO POR VALVULA');
+            else triggerGraze(vt._x + vt._dir * 20, vt._y);
+          }
+        }
+      }
+
+      for (let i = ch._foes.length - 1; i >= 0; i--) {
+        const e = ch._foes[i];
+        if (e._stun > 0) {
+          e._stun -= dt;
+          continue;
+        }
+        e._x += e._vx * dt;
+        if (e._x < WALL_L + 16 || e._x > WALL_R - 16) e._vx = -e._vx;
+
+        let dead = false;
+        for (let j = playerShots.length - 1; j >= 0; j--) {
+          if (hy(playerShots[j]._x - e._x, playerShots[j]._y - e._y) < 10) {
+            playerShots.splice(j, 1);
+            if (--e._hp <= 0) dead = true;
             break;
           }
         }
-      } else if (e.code === 'KeyE') {
-        // Ascensor de Zona Inicial: permite iniciar en cualquier Zona desbloqueada (Z1..Z10)
-        for (let k = 1; k <= 10; k++) {
-          const cand = (startZone + k) % 10;
-          if (isZoneUnlocked(cand)) {
-            startZone = cand;
-            sfxTone(300 + cand * 40, 520 + cand * 40, 0.08, 'triangle', 0.08);
-            break;
+        if (dead || (drone.dashT > 0 && hy(drone.x - e._x, drone.y - e._y) < 15)) {
+          ch._foes.splice(i, 1);
+          score += 120;
+          sfxTone(360, 110, 0.12, 'sawtooth', 0.1);
+          for (let k = 0; k < 8; k++) spawnParticle(1, e._x, e._y, (rn() - 0.5) * 2.4, (rn() - 0.5) * 2.4, 16, 2, PAL[9]);
+          continue;
+        }
+
+        if (e._y > camY + 20 && e._y < camY + H - 20) {
+          e._cd -= dt;
+          if (e._cd <= 0) {
+            e._cd = e._t === 1 ? 98 : 122;
+            const ang = M.atan2(drone.y - e._y, drone.x - e._x);
+            pushShot(e._x, e._y, cs(ang) * 1.4, sn(ang) * 1.4, 3);
           }
+        }
+
+        const df = hy(drone.x - e._x, drone.y - e._y);
+        if (df < drone.r + 6) applyDamage(26, 1, 'INTERCEPTADO POR CENTINELA');
+        else if (df < drone.r + 12) triggerGraze(e._x, e._y);
+      }
+
+      for (let i = ch._saws.length - 1; i >= 0; i--) {
+        const g = ch._saws[i];
+        if (g._stun > 0) {
+          g._stun -= dt;
+          continue;
+        }
+        g._ang += g._omg * dt;
+        g._x += g._vx * dt;
+        if (g._x < WALL_L + g._r + 6 || g._x > WALL_R - g._r - 6) g._vx = -g._vx;
+
+        const ds = hy(drone.x - g._x, drone.y - g._y) || 0.001;
+        if (ds <= drone.r + g._r) {
+          if (drone.overdrive > 0 || drone.dashT > 0) {
+            ch._saws.splice(i, 1);
+            score += 100;
+            sfxTone(320, 90, 0.12, 'sawtooth', 0.1);
+            continue;
+          }
+          drone.vx = ((drone.x - g._x) / ds) * 1.6;
+          drone.vy = ((drone.y - g._y) / ds) * 1.6;
+          applyDamage(28, 1, 'DESTRUIDO POR SIERRA');
+        } else if (ds <= drone.r + g._r + 6) triggerGraze(g._x, g._y);
+      }
+    }
+
+    stepBossShots(dt, 0, 30, 'ALCANZADO POR PROYECTIL');
+
+    const targetCamY = drone.y - H * 0.56;
+    if (targetCamY < camY) camY += (targetCamY - camY) * (1 - M.pow(0.85, dt));
+    else if (targetCamY > camY + 26) camY += (targetCamY - camY - 26) * (1 - M.pow(0.9, dt));
+
+    const cm = getHeightM(drone.y);
+    if (cm > maxMeters) maxMeters = cm;
+
+    if (gameMode === 0) {
+      const distM = mx(0, fl((drone.y - levelGoalY) / 12));
+      if (distM <= 30 && warnAlertLevel === 0) {
+        warnAlertLevel = 1;
+        playJingle(2);
+      } else if (distM <= 12 && warnAlertLevel === 1) {
+        warnAlertLevel = 2;
+        playJingle(2);
+      }
+      if (drone.y <= levelGoalY) beginBossIntro(currentLevel);
+    } else if (gameMode === 2) {
+      while (activeChunks[activeChunks.length - 1]._yTop > camY - H) {
+        topChunkIndex++;
+        const nextLv = fl(topChunkIndex / 6) % 4;
+        activeChunks.push(createChunk(topChunkIndex, nextLv, false));
+        currentLevel = nextLv;
+      }
+      if (activeChunks.length > 4 && activeChunks[0]._yTop > camY + H + 120) activeChunks.shift();
+      if (maxMeters >= nextBossMeters) beginBossIntro(fl(maxMeters / 120) % 4);
+    }
+  }
+
+  function updateParticles(dt) {
+    for (let i = 0; i < POOL_SIZE; i++) {
+      const p = particles[i];
+      if (!p._on) continue;
+      p._x += p._vx * dt;
+      p._y += p._vy * dt;
+      if (p._t === 1) p._vy += 0.04 * dt;
+      p._l -= dt;
+      if (p._l <= 0) p._on = 0;
+    }
+  }
+
+  // =========================================================================
+  // 9. RENDERIZADO ESTILO V6 (BIOMAS HSL, POD OCULAR, SIERRAS DENTADAS, LAVA)
+  // =========================================================================
+  function drawBackground(cy, lv) {
+    fR(0, 0, W, H, lv._bg);
+
+    // Tuberias industriales parallax (estilo v6)
+    const pSlow = fl(-cy * 0.22);
+    fR(WALL_L + 18, 0, 12, H, lv._wall);
+    fR(W * 0.5 - 6, 0, 12, H, lv._wall);
+    fR(WALL_R - 30, 0, 12, H, lv._wall);
+
+    for (let sy = ((pSlow % 44) + 44) % 44 - 44; sy < H; sy += 44) {
+      fR(WALL_L + 16, sy + 6, PLAY_W - 32, 3, lv._wall);
+      fR(WALL_L + 17, sy + 18, 14, 4, lv._brick);
+      fR(W * 0.5 - 7, sy + 18, 14, 4, lv._brick);
+      fR(WALL_R - 31, sy + 18, 14, 4, lv._brick);
+
+      if (lv._pat === 0) {
+        fR(68, sy + 12, 6, 12, PAL[3]);
+        fR(246, sy + 12, 6, 12, PAL[3]);
+      } else if (lv._pat === 1) {
+        fR(156, sy + 24, 8, 5, ((elapsedTime * 5) | 0) & 1 ? PAL[10] : PAL[12]);
+      } else if (lv._pat === 3) {
+        fR(96, sy + 10, 4, 14, lv._trim);
+        fR(220, sy + 10, 4, 14, lv._trim);
+      } else {
+        fR(158, sy + 10, 4, 14, PAL[6]);
+      }
+    }
+
+    // Muros laterales V6 con ladrillos y ribete brillante
+    fR(0, 0, WALL_L, H, lv._brick);
+    fR(WALL_R, 0, W - WALL_R, H, lv._brick);
+    fR(WALL_L - 2, 0, 2, H, lv._trim);
+    fR(WALL_R, 0, 2, H, lv._trim);
+
+    const pWall = fl(-cy);
+    const alarmFlash = warnAlertLevel > 0 && (((elapsedTime * 8) | 0) & 1);
+    for (let sy = ((pWall % 24) + 24) % 24 - 24; sy < H; sy += 24) {
+      fR(2, sy + 2, 16, 18, lv._wall);
+      fR(WALL_R + 4, sy + 2, 16, 18, lv._wall);
+      fR(7, sy + 8, 5, 6, alarmFlash ? PAL[8] : lv._trim);
+      fR(WALL_R + 10, sy + 8, 5, 6, alarmFlash ? PAL[8] : lv._trim);
+    }
+  }
+
+  function drawDronePod(cx, cy, ang, hull, eyeDx, eyeDy, fireL, fireR, isOver, isDash) {
+    rot(cx, cy, ang, () => {
+      const jC = isOver ? PAL[6] : isDash ? PAL[10] : PAL[9];
+      fR(-9, 1, 4, 5, PAL[4]);
+      fR(5, 1, 4, 5, PAL[4]);
+      if (fireL) {
+        const f = 7 + ((elapsedTime * 30) & 3);
+        fR(-9, 6, 4, f, jC);
+        fR(-8, 6, 2, fl(f * 0.5), PAL[13]);
+      }
+      if (fireR) {
+        const f = 7 + ((elapsedTime * 30) & 3);
+        fR(5, 6, 4, f, jC);
+        fR(6, 6, 2, fl(f * 0.5), PAL[13]);
+      }
+
+      if (selectedHull === 1) {
+        fR(-9, -4, 3, 6, hull._c1);
+        fR(6, -4, 3, 6, hull._c1);
+      } else if (selectedHull === 2) {
+        fR(-10, -2, 4, 3, PAL[10]);
+        fR(6, -2, 4, 3, PAL[10]);
+        fR(-1, -10, 2, 4, hull._c3);
+      } else if (selectedHull === 3) {
+        fArc(cs(elapsedTime * 5) * 9, sn(elapsedTime * 5) * 6, 2, PAL[10]);
+        fArc(-cs(elapsedTime * 5) * 9, -sn(elapsedTime * 5) * 6, 2, PAL[15]);
+      }
+
+      fArc(0, 0, 7, hull._c2);
+      fArc(0, 0, 6, hull._c1);
+      fR(-2, -9, 4, 3, hull._c3);
+      fArc(0, 0, 4.2, PAL[0]);
+      fArc(eyeDx, eyeDy, 1.8, PAL[13]);
+      fArc(eyeDx * 1.15, eyeDy * 1.15, 0.9, PAL[0]);
+      fArc(-2, -2, 1.3, PAL[10]);
+    });
+  }
+
+  function drawBossActor(lv) {
+    const bx = boss.x;
+    const by = boss.y - camY;
+    if (boss.invuln > 0 && (((boss.invuln * 0.6) | 0) & 1)) return;
+
+    rot(bx, by, 0, () => {
+      if (boss.type === 0) {
+        ctx.rotate(elapsedTime * 1.6);
+        drawToothed(16, 18, 13, PAL[3], PAL[9]);
+        drawToothed(10, 12, 8, PAL[7], PAL[5]);
+      } else if (boss.type === 1) {
+        ctx.rotate(-elapsedTime * 2.4);
+        drawToothed(14, 18, 12, '#1e1b4b', PAL[10]);
+        fR(-21, -3, 5, 6, PAL[15]);
+        fR(16, -3, 5, 6, PAL[15]);
+      } else if (boss.type === 2) {
+        ctx.rotate(elapsedTime * 1.3);
+        drawToothed(12, 17, 13, '#064e3b', PAL[14]);
+        for (let k = 0; k < 3; k++) {
+          const a = elapsedTime * 3 + (k * PI2) / 3;
+          fArc(cs(a) * 19, sn(a) * 19, 3.5, PAL[14]);
+        }
+      } else {
+        ctx.rotate(elapsedTime * 1.9);
+        drawToothed(18, 19, 14, '#3b0764', PAL[6]);
+        ctx.rotate(-elapsedTime * 3.8);
+        drawToothed(8, 13, 8, PAL[15], PAL[13]);
+      }
+      fArc(0, 0, 7.5, PAL[0]);
+      fArc(0, 0, 4.5 + sn(elapsedTime * 8), lv._lavaTop);
+    });
+
+    if (boss.shield > 0) cArc(bx, by, boss.r + 5, PAL[10], 2);
+  }
+
+  function drawEnemyActor(e, cy) {
+    rot(e._x, e._y - cy, 0, () => {
+      if (e._t === 0) {
+        ctx.rotate(elapsedTime * 3);
+        drawToothed(8, 8, 5.5, PAL[7], PAL[9]);
+        fArc(0, 0, 3, PAL[6]);
+      } else if (e._t === 1) {
+        fR(-7, -3, 14, 6, '#1e3a8a');
+        fArc(-7, 0, 3, PAL[10]);
+        fArc(7, 0, 3, PAL[10]);
+        fArc(0, 0, 4, PAL[6]);
+      } else if (e._t === 2) {
+        ctx.rotate(-elapsedTime * 2);
+        drawToothed(6, 8, 6, '#064e3b', PAL[14]);
+        fArc(0, 0, 3.2, PAL[11]);
+      } else {
+        ctx.rotate(sn(elapsedTime * 4) * 0.25);
+        fR(-9, -2, 18, 4, '#581c87');
+        drawToothed(8, 7, 4, PAL[4], PAL[6]);
+        fArc(0, 0, 2.5, PAL[8]);
+      }
+      if (e._stun > 0) cArc(0, 0, 10, PAL[10], 1.5);
+    });
+  }
+
+  function drawWorld(cy, lv) {
+    if (phase === 2 || phase === 1 || phase === 3) {
+      fR(WALL_L, H - 14, PLAY_W, 3, PAL[10]);
+      if (boss.active) drawBossActor(lv);
+    } else {
+      // Marcadores de horizonte V6 (tramos / torre / meta del jefe)
+      for (let mMark = 60; mMark < 1000; mMark += 60) {
+        const my = (200 - mMark * 12 - cy) | 0;
+        if (my > -10 && my < H + 10) {
+          for (let x = WALL_L; x < WALL_R; x += 14) fR(x, my, 7, 1, lv._trim);
+          drawText('COTAS ' + mMark + 'M', WALL_L + 6, my - 8, lv._trim, 1, 0);
+        }
+      }
+      if (gameMode === 0) {
+        const gy = (levelGoalY - cy) | 0;
+        if (gy > -20 && gy < H + 20) {
+          for (let x = WALL_L; x < WALL_R; x += 12) fR(x, gy, 7, 2, ((elapsedTime * 10) | 0) & 1 ? PAL[8] : PAL[6]);
+          drawText('COMPUERTA DEL JEFE', W * 0.5, gy - 10, PAL[6], 1, 1);
+        }
+      }
+
+      for (let c = 0; c < activeChunks.length; c++) {
+        const ch = activeChunks[c];
+        if (ch._yBot < cy - 30 || ch._yTop > cy + H + 30) continue;
+
+        for (let i = 0; i < ch._plats.length; i++) {
+          const p = ch._plats[i];
+          if ((p._wall && !p._bar) || p._brk > 0) continue;
+          const sx = p._x1 | 0;
+          const sy = (p._y1 - cy) | 0;
+          const pw = (p._x2 - p._x1) | 0;
+          const ph = (p._y2 - p._y1) | 0;
+
+          if (p._rest) {
+            fR(sx, sy, pw, ph, '#064e3b');
+            fR(sx, sy, pw, 2, PAL[14]);
+            for (let k = 6; k < pw - 6; k += 14) fR(sx + k, sy + 4, 4, 2, PAL[13]);
+            drawText('ESTACION DESCANSO', sx + pw * 0.5, sy - 26, PAL[14], 1, 1);
+          } else if (p._bar) {
+            fR(sx, sy, pw, ph, lv._brick);
+            fR(sx, sy, pw, 2, lv._trim);
+          } else {
+            fR(sx, sy, pw, ph, p._frag ? PAL[3] : lv._plat);
+            fR(sx, sy, pw, 2, p._frag ? PAL[9] : lv._platTop);
+            for (let rx = sx + 5; rx < sx + pw - 5; rx += 10) fR(rx, sy + 4, 4, 1, PAL[13]);
+            if (p._spr) {
+              const mxp = (sx + pw * 0.5) | 0;
+              fR(mxp - 8, sy - 3, 16, 3, PAL[5]);
+              fR(mxp - 6, sy - 5, 12, 2, PAL[10]);
+            }
+          }
+        }
+
+        for (let i = 0; i < ch._rests.length; i++) {
+          const rs = ch._rests[i];
+          const ry = rs._y - cy;
+          rot(rs._x, ry, rs._used ? 0 : elapsedTime * 2, () => drawToothed(8, 10, 8, rs._used ? PAL[1] : '#064e3b', rs._used ? PAL[12] : PAL[14]));
+          fArc(rs._x, ry, 4, rs._used ? PAL[12] : PAL[10]);
+          if (!rs._used) {
+            fR(rs._x - 3, ry - 1, 6, 2, PAL[13]);
+            fR(rs._x - 1, ry - 3, 2, 6, PAL[13]);
+          }
+        }
+
+        for (let i = 0; i < ch._cores.length; i++) {
+          const co = ch._cores[i];
+          if (!co._on) continue;
+          rot(co._x, co._y - cy + sn(elapsedTime * 5) * 1.5, elapsedTime * 3, () => {
+            fR(-4, -4, 8, 8, PAL[5]);
+            ctx.rotate(M.PI * 0.25);
+            fR(-3, -3, 6, 6, PAL[6]);
+            fArc(0, 0, 1.5, PAL[13]);
+          });
+        }
+
+        // Valvulas de vapor laterales V6
+        for (let i = 0; i < ch._vents.length; i++) {
+          const vt = ch._vents[i];
+          const vy = vt._y - cy;
+          const cyc = (elapsedTime * 60 + vt._ph) % vt._per;
+          fR(vt._dir > 0 ? vt._x : vt._x - 7, vy - 4, 7, 8, PAL[4]);
+          fArc(vt._x + vt._dir * 3, vy, 2, cyc >= 72 && cyc < 106 ? PAL[6] : PAL[8]);
+          if (vt._stun <= 0 && cyc >= 106 && cyc < 144) {
+            for (let k = 0; k < 5; k++) {
+              fArc(vt._x + vt._dir * (10 + k * 10), vy + sn(elapsedTime * 18 + k) * 2, 5 - k * 0.6, k < 2 ? PAL[9] : PAL[13]);
+            }
+          }
+        }
+
+        // Compuertas telescopicas V6
+        for (let i = 0; i < ch._gates.length; i++) {
+          const gt = ch._gates[i];
+          const cyc = (elapsedTime * 60 + gt._ph) % gt._per;
+          const sy = (gt._y - cy) | 0;
+          fR(gt._x, sy - 4, 4, 8, PAL[4]);
+          fR(gt._x + gt._w - 4, sy - 4, 4, 8, PAL[4]);
+          if (gt._stun <= 0) {
+            if (cyc >= 80 && cyc < 102 && (((elapsedTime * 16) | 0) & 1)) fR(gt._x + 4, sy, gt._w - 8, 2, PAL[6]);
+            else if (cyc >= 102 && cyc < 138) {
+              fR(gt._x + 4, sy - 2, gt._w - 8, 4, PAL[8]);
+              fR(gt._x + 4, sy - 1, gt._w - 8, 2, PAL[13]);
+            }
+          }
+        }
+
+        for (let i = 0; i < ch._foes.length; i++) drawEnemyActor(ch._foes[i], cy);
+
+        for (let i = 0; i < ch._saws.length; i++) {
+          const g = ch._saws[i];
+          rot(g._x, g._y - cy, g._ang, () => {
+            drawToothed(14, g._r + 1.5, g._r - 2, g._stun > 0 ? PAL[10] : lv._gearCol, lv._gearRim);
+            fArc(0, 0, 3, PAL[0]);
+            fArc(0, 0, 1.5, g._stun > 0 ? PAL[11] : PAL[8]);
+          });
         }
       }
     }
 
-    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Enter'].includes(e.code)) {
-      e.preventDefault();
+    for (let i = 0; i < playerShots.length; i++) {
+      const ps = playerShots[i];
+      fArc(ps._x, ps._y - cy, ps._parry ? 4 : 3, ps._parry ? PAL[10] : PAL[6]);
+      fArc(ps._x, ps._y - cy, 1.5, PAL[13]);
     }
+
+    const canShowParryHint = selectedSkill === 0 && drone.slamCd <= 0;
+    for (let i = 0; i < bossShots.length; i++) {
+      const s = bossShots[i];
+      const sx = s._x | 0;
+      const sy = (s._y - cy) | 0;
+      const near = canShowParryHint && hy(s._x - drone.x, s._y - drone.y) <= PARRY_RADIUS + 6;
+      fArc(sx, sy, s._r, near ? PAL[10] : PAL[9]);
+      fArc(sx, sy, 1.5, PAL[13]);
+      if (near) {
+        ctx.strokeStyle = PAL[10];
+        ctx.lineWidth = 1;
+        ctx.strokeRect(sx - 6, sy - 6, 12, 12);
+      }
+    }
+  }
+
+  function drawDrone(cy) {
+    const dx = drone.x;
+    const dy = drone.y - cy;
+
+    if (drone.parryRing > 0 || drone.slamWaveR > 0 || drone.shield > 0 || drone.overdrive > 0) {
+      cArc(
+        dx, dy,
+        drone.parryRing > 0 ? PARRY_RADIUS : drone.slamWaveR > 0 ? drone.slamWaveR : 11,
+        drone.overdrive > 0 || drone.slamWaveR > 0 ? PAL[6] : PAL[10],
+        drone.parryRing > 0 || drone.slamWaveR > 0 ? 2 : 1.5
+      );
+    }
+
+    ctx.globalAlpha = drone.invuln > 0 && (((drone.invuln * 0.5) | 0) & 1) ? 0.45 : 1;
+    const lookX = phase === 2 ? boss.x - drone.x : drone.vx;
+    const lookY = phase === 2 ? boss.y - drone.y : drone.vy;
+    const lm = hy(lookX, lookY) || 1;
+    drawDronePod(dx, dy, drone.theta, HULLS[selectedHull], (lookX / lm) * 1.8, (lookY / lm) * 1.8, drone.leftOn, drone.rightOn, drone.overdrive > 0, drone.dashT > 0);
+    ctx.globalAlpha = 1;
+  }
+
+  function drawLava(cy, lv) {
+    const sy = (lavaY - cy) | 0;
+    if (sy >= H) return;
+    fR(WALL_L, sy + 6, PLAY_W, H - sy + 12, lv._lavaDeep);
+    fR(WALL_L, sy + 2, PLAY_W, 8, lv._lavaMid);
+    for (let x = WALL_L; x < WALL_R; x += 6) {
+      const wy = sy + ((sn(elapsedTime * 7 + x * 0.14) * 2) | 0);
+      fR(x, wy, 6, 3, lv._lavaTop);
+      if (((x + ((elapsedTime * 20) | 0)) % 24) === 0) fR(x + 2, wy - 1, 2, 1, lv._spark);
+    }
+  }
+
+  function drawParticles(cy) {
+    for (let i = 0; i < POOL_SIZE; i++) {
+      const p = particles[i];
+      if (p._on) fArc(p._x, p._y - cy, p._s * 0.6, p._c);
+    }
+  }
+
+  function drawHUD(lv) {
+    fR(0, 0, W, 24, PAL[0]);
+    fR(0, 23, W, 2, lv._trim);
+
+    drawText('HP', 6, 4, PAL[11], 1, 0);
+    for (let i = 0; i < drone.maxHp; i++) fR(20 + i * 7, 4, 5, 7, i < drone.hp ? (drone.hp <= 1 ? PAL[8] : PAL[5]) : PAL[1]);
+
+    drawText('PSI', 6, 13, PAL[6], 1, 0);
+    fR(28, 13, 56, 7, PAL[1]);
+    const rPsi = drone.pressure / drone.maxPsi;
+    fR(29, 14, fl(54 * rPsi), 5, drone.purge > 0 ? PAL[8] : phase === 2 || drone.overdrive > 0 ? PAL[10] : rPsi < 0.25 ? PAL[9] : PAL[5]);
+    if (phase === 2) drawText('INF', 87, 13, PAL[10], 1, 0);
+
+    const goalText = gameMode === 0 ? maxMeters + '/' + lv._lenM + 'M' : maxMeters + 'M';
+    drawText(lv._name, 160, 4, PAL[6], 1, 1, PAL[13]);
+    drawText('ALT:' + goalText + (grazeCombo > 1 ? ' X' + grazeCombo : ''), 160, 13, PAL[11], 1, 1);
+
+    const ready = drone.slamCd <= 0 && drone.purge <= 0;
+    drawText('HAB:' + (ready ? 'LISTA' : fl(drone.slamCd / 6)), 314, 4, ready ? PAL[14] : PAL[4], 1, 2);
+    drawText('PTS:' + score, 314, 13, PAL[5], 1, 2);
+
+    let slotY = 27;
+    if (phase === 2 || phase === 1) {
+      drawPanel(WALL_L + 8, slotY, PLAY_W - 16, 16, PAL[0], PAL[8]);
+      drawText(lv._boss, W * 0.5, slotY + 2, PAL[6], 1, 1);
+      fR(WALL_L + 14, slotY + 10, PLAY_W - 28, 4, PAL[1]);
+      fR(WALL_L + 14, slotY + 10, fl(((PLAY_W - 28) * boss.hp) / boss.maxHp), 4, boss.shield > 0 ? PAL[10] : PAL[8]);
+      slotY += 18;
+    } else if (gameMode === 0) {
+      const distM = mx(0, fl((drone.y - levelGoalY) / 12));
+      if (distM > 0 && distM <= 30) {
+        fR(WALL_L + 30, slotY, PLAY_W - 60, 11, 'rgba(6,9,15,0.92)');
+        drawText('ALERTA: JEFE A ' + distM + 'M!', W * 0.5, slotY + 2, distM <= 12 ? PAL[8] : PAL[6], 1, 1);
+        slotY += 13;
+      }
+    }
+
+    if (bannerTimer > 0) {
+      fR(WALL_L + 14, slotY, PLAY_W - 28, 12, 'rgba(6,9,15,0.92)');
+      drawText(bannerText, W * 0.5, slotY + 3, bannerCol, 1, 1);
+    }
+
+    if (phase === 1) {
+      const sh = fl(mn(24, ab(sn(elapsedTime * 5)) * 18 + 6));
+      fR(WALL_L, 25, sh, H - 25, PAL[0]);
+      fR(WALL_R - sh, 25, sh, H - 25, PAL[0]);
+      fR(0, 88, W, 62, 'rgba(6,9,15,0.92)');
+      fR(0, 88, W, 2, PAL[8]);
+      fR(0, 148, W, 2, PAL[8]);
+      drawText('!! WARNING !!', W * 0.5, 96, ((elapsedTime * 10) | 0) & 1 ? PAL[8] : PAL[6], 2, 1, PAL[13]);
+      drawText('VS ' + lv._boss, W * 0.5, 116, PAL[10], 1, 1);
+      drawText(lv._sub, W * 0.5, 130, PAL[4], 1, 1);
+    } else if (phase === 4) {
+      drawPanel(28, 50, W - 56, 138, PAL[0], PAL[4]);
+      drawText('NIVEL COMPLETADO', W * 0.5, 60, PAL[5], 2, 1, PAL[6]);
+      drawText(lv._name, W * 0.5, 82, PAL[10], 1, 1);
+      drawDronePod(66, 122 + sn(elapsedTime * 8) * 3, 0, HULLS[selectedHull], 0, -1.2, 1, 1, 0, 0);
+      drawText('PUNTOS: ' + score, 184, 106, PAL[13], 1, 1);
+      drawText('SIGUIENTE NIVEL...', 184, 124, PAL[14], 1, 1);
+      drawText('CURA: +1 HP AL SUBIR', 184, 140, PAL[11], 1, 1);
+      drawText('[ESPACIO] CONTINUAR', W * 0.5, 168, PAL[4], 1, 1);
+    } else if (phase === 5) {
+      drawPanel(24, 42, W - 48, 156, PAL[0], PAL[5]);
+      drawText('MISION CUMPLIDA!', W * 0.5, 54, PAL[6], 2, 1, PAL[13]);
+      drawText('CIUDADELA CENIT DERROTADA', W * 0.5, 78, PAL[10], 1, 1);
+      drawText('PUNTUACION FINAL: ' + score, W * 0.5, 102, PAL[14], 1, 1);
+      drawText('TIEMPO: ' + fl(runSeconds) + ' SEGUNDOS', W * 0.5, 118, PAL[13], 1, 1);
+      drawText('TODOS LOS NIVELES COMPLETOS', W * 0.5, 136, PAL[11], 1, 1);
+      addBtn(84, 158, W - 168, 22, 'VOLVER AL MENU [ESP]', PAL[2], () => {
+        gameState = 0;
+        phase = 0;
+      }, PAL[5]);
+    }
+
+    if (damageFlash > 0) fR(0, 0, W, H, 'rgba(239,68,68,' + mn(0.35, damageFlash * 0.025) + ')');
+  }
+
+  // =========================================================================
+  // 10. MENUS V6 CON BOTONES CLICABLES, HANGAR CLARO Y SELECTOR DE SEMILLA
+  // =========================================================================
+  const PLAY_LBL = 'JUGAR YA [ESP]';
+  function addBtn(x, y, w, h, label, bg, fn, borderCol) {
+    drawPanel(x, y, w, h, bg || PAL[1], borderCol || PAL[4]);
+    drawText(label, x + w * 0.5, y + ((h - 7) * 0.5) | 0, PAL[13], 1, 1);
+    uiBtns.push({ _x: x, _y: y, _w: w, _h: h, _fn: fn });
+  }
+
+  const cycleMode = (dir) => {
+    gameMode = (gameMode + dir + 3) % 3;
+    sfxTone(420, 580, 0.06, 'square', 0.06);
+  };
+
+  const cycleStartLevel = (dir) => {
+    startLevel = (startLevel + dir + 4) % 4;
+    if (startLevel > maxLevelReached) startLevel = dir > 0 ? 0 : mn(3, maxLevelReached);
+    sfxTone(360 + startLevel * 60, 520, 0.06, 'triangle', 0.07);
+  };
+
+  function drawMenu() {
+    uiBtns = [];
+    const lv = LEVELS[gameMode === 0 ? startLevel : (((elapsedTime * 0.2) | 0) % 4)];
+    drawBackground(elapsedTime * -14, lv);
+    drawPanel(14, 10, W - 28, H - 20, 'rgba(6,9,15,0.94)', PAL[4]);
+
+    drawText('STEAM HOPPER', W * 0.5, 18, PAL[5], 2, 1, PAL[6]);
+
+    addBtn(26, 38, 84, 15, 'INICIO', menuTab === 0 ? PAL[3] : PAL[1], () => (menuTab = 0), menuTab === 0 ? PAL[6] : PAL[4]);
+    addBtn(118, 38, 84, 15, 'HANGAR [T]', menuTab === 1 ? '#0e7490' : PAL[1], () => (menuTab = 1), menuTab === 1 ? PAL[10] : PAL[4]);
+    addBtn(210, 38, 84, 15, 'GUIA [G]', menuTab === 2 ? '#166534' : PAL[1], () => (menuTab = 2), menuTab === 2 ? PAL[14] : PAL[4]);
+
+    if (menuTab === 0) {
+      drawDronePod(W * 0.5, 70 + sn(elapsedTime * 3) * 2, sn(elapsedTime * 2) * 0.08, HULLS[selectedHull], sn(elapsedTime) * 1.4, -0.8, 1, 1, 0, 0);
+
+      const mNames = ['HISTORIA (NV.1-4)', 'BOSS RUSH (4 JEFES)', 'TORRE INFINITA'];
+      drawText('MODALIDAD [M]:', W * 0.5, 92, PAL[11], 1, 1);
+      addBtn(36, 103, W - 72, 17, '<  ' + mNames[gameMode] + '  >', PAL[1], () => cycleMode(1), PAL[10]);
+
+      if (gameMode === 0) {
+        addBtn(36, 125, W - 72, 17, 'NIVEL [E]: ' + LEVELS[startLevel]._name, PAL[1], () => cycleStartLevel(1), PAL[5]);
+      } else if (gameMode === 2) {
+        addBtn(36, 125, 138, 17, 'SEMILLA [F]: ' + seed, PAL[1], editSeed, PAL[5]);
+        addBtn(178, 125, 106, 17, 'AZAR [R]: ' + (randomSeed ? 'SI' : 'NO'), randomSeed ? '#0e7490' : PAL[1], () => {
+          randomSeed = !randomSeed;
+          if (randomSeed) rollSeed();
+          sfxTone(440, 620, 0.05, 'triangle', 0.06);
+        }, PAL[10]);
+      } else {
+        drawText('COMBATE CONTINUO CONTRA LOS 4 JEFES', W * 0.5, 130, PAL[6], 1, 1);
+      }
+
+      drawText('NAVE: ' + HULLS[selectedHull]._name + ' | ' + SKILLS[selectedSkill]._name, W * 0.5, 150, PAL[13], 1, 1);
+      drawText('RECORD: ' + highScore + 'M | AUDIO [S]: ' + ['TODO', 'SFX', 'MUTE'][soundMode], W * 0.5, 163, PAL[4], 1, 1);
+      addBtn(68, 182, W - 136, 26, PLAY_LBL, PAL[3], startGame, PAL[6]);
+    } else if (menuTab === 1) {
+      drawText('VEHICULO [1-4]:', 24, 59, PAL[10], 1, 0);
+      drawText('HABILIDAD [Q]:', 164, 59, PAL[6], 1, 0);
+      for (let i = 0; i < 4; i++) {
+        const h = HULLS[i];
+        const uh = isHullUnlocked(i);
+        const sh = selectedHull === i;
+        addBtn(
+          22, 69 + i * 14, 136, 13,
+          (sh ? '>' : '') + (i + 1) + '.' + h._name + (uh ? '' : '*'),
+          sh ? '#0e7490' : inspectHull === i ? PAL[2] : PAL[1],
+          () => {
+            inspectHull = i;
+            if (uh) selectedHull = i;
+          },
+          sh ? PAL[6] : uh ? PAL[4] : PAL[12]
+        );
+
+        const sk = SKILLS[i];
+        const us = isSkillUnlocked(i);
+        const ss = selectedSkill === i;
+        addBtn(
+          162, 69 + i * 14, 136, 13,
+          (ss ? '>' : '') + sk._name + (us ? '' : '*'),
+          ss ? PAL[3] : inspectSkill === i ? PAL[2] : PAL[1],
+          () => {
+            inspectSkill = i;
+            if (us) selectedSkill = i;
+          },
+          ss ? PAL[6] : us ? PAL[4] : PAL[12]
+        );
+      }
+
+      // Tarjeta intuitiva con barras legibles + rasgo real y desbloqueo
+      const ah = HULLS[inspectHull];
+      const sk = SKILLS[inspectSkill];
+      const uh = isHullUnlocked(inspectHull);
+      const us = isSkillUnlocked(inspectSkill);
+      drawPanel(22, 128, W - 44, 50, PAL[0], PAL[10]);
+
+      drawText('VIDA:' + ah._hp, 28, 133, PAL[14], 1, 0);
+      fR(74, 134, 30, 5, PAL[1]);
+      fR(74, 134, ah._hp * 5, 5, PAL[14]);
+      drawText('VEL', 110, 133, PAL[10], 1, 0);
+      fR(132, 134, 42, 5, PAL[1]);
+      fR(132, 134, fl(ah._tx * 34), 5, PAL[10]);
+      drawText('AHORRO', 180, 133, PAL[6], 1, 0);
+      fR(220, 134, 52, 5, PAL[1]);
+      fR(220, 134, fl((1.3 - ah._psi) * 90), 5, PAL[6]);
+
+      drawText(uh ? ah._trait : 'NAVE BLOQUEADA: ' + ah._req, W * 0.5, 145, uh ? PAL[13] : PAL[8], 1, 1);
+      drawText('HAB: ' + sk._name + ' (' + sk._cost + ' PSI)' + (us ? '' : ' [' + sk._req + ']'), W * 0.5, 156, us ? PAL[6] : PAL[9], 1, 1);
+      drawText(sk._desc, W * 0.5, 167, PAL[11], 1, 1);
+      addBtn(76, 184, W - 152, 24, PLAY_LBL, PAL[3], startGame, PAL[6]);
+    } else {
+      drawPanel(24, 62, W - 48, 114, PAL[0], PAL[14]);
+      ['A / D O FLECHAS: PROPULSORES', 'PULSA AMBOS PARA SUBIR RECTO', 'ESPACIO / ABAJO: HABILIDAD', 'SOLO ESCUDO PARRY REFLEJA BALAS', 'ESTACIONES VERDES CURAN +1 HP Y PSI', '3 NUCLEOS DORADOS = OVERDRIVE', '[S] AUDIO | [C] CRT | [P] PAUSA'].forEach((t, i) => {
+        drawText(t, W * 0.5, 70 + i * 13, [PAL[13], PAL[11], PAL[6], PAL[10], PAL[14], PAL[9], PAL[4]][i], 1, 1);
+      });
+      addBtn(76, 184, W - 152, 24, PLAY_LBL, '#166534', startGame, PAL[14]);
+    }
+  }
+
+  function drawOverlayModal() {
+    uiBtns = [];
+    const isPause = gameState === 3;
+    drawPanel(28, 30, W - 56, H - 60, 'rgba(6,9,15,0.95)', isPause ? PAL[10] : PAL[8]);
+    drawText(isPause ? 'PAUSA' : 'FIN DE PARTIDA', W * 0.5, 42, isPause ? PAL[10] : PAL[9], 2, 1, PAL[13]);
+    drawText(isPause ? LEVELS[currentLevel % 4]._name : deathReason, W * 0.5, 64, isPause ? PAL[6] : PAL[8], 1, 1);
+
+    drawText('ALTURA: ' + maxMeters + 'M | PUNTOS: ' + score, W * 0.5, 86, PAL[13], 1, 1);
+    drawText('RECORD: ' + highScore + 'M', W * 0.5, 102, PAL[5], 1, 1);
+    drawText('HABILIDAD: ' + SKILLS[selectedSkill]._name, W * 0.5, 118, PAL[11], 1, 1);
+
+    addBtn(56, 138, W - 112, 22, isPause ? 'CONTINUAR [ESP]' : 'REINTENTAR [ESP]', PAL[3], () => {
+      if (isPause) gameState = 1;
+      else startGame();
+    }, PAL[6]);
+    addBtn(56, 166, W - 112, 20, 'MENU PRINCIPAL [M]', PAL[1], () => {
+      gameState = 0;
+      phase = 0;
+      menuTab = 0;
+    }, PAL[10]);
+  }
+
+  function drawCRT() {
+    if (!crtEnabled) return;
+    ctx.fillStyle = 'rgba(0,0,0,0.14)';
+    for (let y = 0; y < H; y += 2) ctx.fillRect(0, y, W, 1);
+  }
+
+  // =========================================================================
+  // 11. CONTROLES (TECLADO + RATON CLICABLE + TACTIL)
+  // =========================================================================
+  window.addEventListener('keydown', (e) => {
+    const c = e.code;
+    const first = !keys[c];
+    keys[c] = true;
     initAudio();
 
-    if (gameState !== 1 && firstPress && (e.code === 'Space' || e.code === 'Enter')) {
-      if (gameState === 3) gameState = 1;
-      else startGame();
-    } else if (gameState === 1 && firstPress && (e.code === 'Space' || e.code === 'KeyS' || e.code === 'ArrowDown')) {
-      triggerActiveSkill();
+    if (c === 'KeyS' && first && gameState !== 1) return void (soundMode = (soundMode + 1) % 3);
+    if (c === 'KeyC' && first) return void (crtEnabled = !crtEnabled);
+    if ((c === 'KeyP' || c === 'Escape') && first && (gameState === 1 || gameState === 3)) {
+      gameState = gameState === 1 ? 3 : 1;
+      return;
     }
+
+    if (gameState !== 1 && first) {
+      if (c === 'KeyT' || c === 'Tab') {
+        e.preventDefault();
+        menuTab = menuTab === 1 ? 0 : 1;
+      } else if (c === 'KeyG') menuTab = menuTab === 2 ? 0 : 2;
+      else if (c === 'KeyM') {
+        if (gameState === 0) cycleMode(1);
+        else {
+          gameState = 0;
+          phase = 0;
+        }
+      } else if (c === 'KeyE') cycleStartLevel(1);
+      else if (c === 'KeyF') editSeed();
+      else if (c === 'KeyR') {
+        randomSeed = !randomSeed;
+        if (randomSeed) rollSeed();
+      } else if (c === 'KeyQ') {
+        for (let k = 1; k <= 4; k++) {
+          const cand = (selectedSkill + k) & 3;
+          if (isSkillUnlocked(cand)) {
+            selectedSkill = cand;
+            inspectSkill = cand;
+            break;
+          }
+        }
+      } else if (c.startsWith('Digit')) {
+        const d = parseInt(c[5], 10) - 1;
+        if (d >= 0 && d < 4) {
+          inspectHull = d;
+          if (isHullUnlocked(d)) selectedHull = d;
+        }
+      } else if (c === 'Space' || c === 'Enter') {
+        e.preventDefault();
+        if (gameState === 3) gameState = 1;
+        else startGame();
+      }
+      return;
+    }
+
+    if (gameState === 1 && first) {
+      if (c === 'KeyM') soundMode = (soundMode + 1) % 3;
+      else if (c === 'Space' || c === 'ArrowDown' || c === 'Enter') {
+        e.preventDefault();
+        if (phase === 4 && phaseTimer < 120) advanceAfterBoss();
+        else if (phase === 5) {
+          gameState = 0;
+          phase = 0;
+        } else triggerActiveSkill();
+      }
+    }
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(c)) e.preventDefault();
   });
 
   window.addEventListener('keyup', (e) => {
@@ -1012,16 +2023,14 @@
 
   window.addEventListener('mousedown', (e) => {
     initAudio();
-    if (gameState !== 1) {
-      const rect = canvas.getBoundingClientRect();
-      const relY = (e.clientY - rect.top) / rect.height;
-      if (relY < 0.72) {
-        menuTab = 1 - menuTab;
-        sfxTone(380, 560, 0.08, 'square', 0.07);
-      } else if (gameState === 3) {
-        gameState = 1;
-      } else {
-        startGame();
+    const rect = canvas.getBoundingClientRect();
+    const cx = ((e.clientX - rect.left) / rect.width) * W;
+    const cy = ((e.clientY - rect.top) / rect.height) * H;
+    for (let i = uiBtns.length - 1; i >= 0; i--) {
+      const b = uiBtns[i];
+      if (cx >= b._x && cx <= b._x + b._w && cy >= b._y && cy <= b._y + b._h) {
+        b._fn();
+        return;
       }
     }
   });
@@ -1033,1267 +2042,56 @@
     touchRight = false;
     const rect = canvas.getBoundingClientRect();
     for (let i = 0; i < e.touches.length; i++) {
-      const tx = e.touches[i].clientX - rect.left;
-      const ty = e.touches[i].clientY - rect.top;
-      const relX = tx / rect.width;
-      const relY = ty / rect.height;
-      if (gameState === 1 && relY > 0.72 && e.type === 'touchstart') triggerActiveSkill();
-      else if (relX < 0.5) touchLeft = true;
+      const rx = (e.touches[i].clientX - rect.left) / rect.width;
+      const ry = (e.touches[i].clientY - rect.top) / rect.height;
+      if (gameState === 1 && ry > 0.72 && e.type === 'touchstart') triggerActiveSkill();
+      else if (rx < 0.5) touchLeft = true;
       else touchRight = true;
     }
-    if (gameState !== 1 && e.type === 'touchstart' && e.touches.length > 0) {
-      if (gameState === 3) gameState = 1;
-      else startGame();
-    }
   }
-
-  window.addEventListener('touchstart', handleTouches, { passive: false });
-  window.addEventListener('touchmove', handleTouches, { passive: false });
-  window.addEventListener('touchend', handleTouches, { passive: false });
+  ['touchstart', 'touchmove', 'touchend'].forEach((ev) => window.addEventListener(ev, handleTouches, { passive: false }));
 
   // =========================================================================
-  // 9. INICIALIZACIÓN CON ASCENSOR DE ZONA Y BUCLE FÍSICO DELTA-TIME
-  // =========================================================================
-  function startGame() {
-    setSeed((Date.now() & 0xffff) ^ 1985);
-    const hull = HULLS[selectedHull];
-    const initMeters = startZone > 0 ? getBossAlt(startZone - 1) + 5 : 0;
-
-    startY = 184;
-    drone.x = W / 2;
-    drone.y = startY - initMeters * 12;
-    drone.vx = 0;
-    drone.vy = 0;
-    drone.theta = 0;
-    drone.maxPsi = 100;
-    drone.pressure = 100;
-    drone.maxHp = hull.hp;
-    drone.hp = hull.hp;
-    drone.invuln = 0;
-    drone.shield = 0;
-    drone.purge = 0;
-    drone.overdrive = 0;
-    drone.comboCores = 0;
-    drone.slamWaveR = 0;
-    drone.slamCd = 0;
-    drone.grazeCd = 0;
-    drone.cooling = false;
-    drone.grounded = false;
-
-    playerShots = [];
-    boss.active = false;
-    boss.shots = [];
-    biomeStage = startZone;
-    bossBuffs = 0;
-    ngPlus = 0;
-    nextBossIdx = startZone;
-    nextBossMeters = getBossAlt(startZone);
-
-    camY = drone.y - H * 0.6;
-    lavaY = drone.y + 68;
-    elapsedTime = 0;
-    currentMeters = initMeters;
-    maxMeters = initMeters;
-    diffLevel = getDiffAtMeters(initMeters);
-    levelBannerTimer = startZone > 0 ? 90 : 0;
-    bannerText = startZone > 0 ? 'ASCENSOR: ' + BIOMES[startZone].name : '';
-    surgeTimer = 0;
-    nextSurgeMeters = initMeters + 120;
-    deathReason = 'CONSUMIDO POR EL MAGMA';
-    screenShake = 0;
-    damageFlash = 0;
-    chromaTimer = 0;
-    seqStep = 0;
-    if (audioCtx) nextNoteTime = audioCtx.currentTime + 0.04;
-
-    for (let i = 0; i < POOL_SIZE; i++) particles[i].active = false;
-    activeChunks = [];
-    updateChunksWindow();
-
-    if (startZone > 0 && activeChunks.length > 0) {
-      activeChunks[0].platforms.push({
-        x1: 68,
-        y1: drone.y + 10,
-        x2: 188,
-        y2: drone.y + 20,
-        w: 120,
-        cool: 1,
-        wall: false,
-        vx: 0,
-        broken: 0
-      });
-    }
-
-    gameState = 1;
-    sfxTone(220, 440, 0.14, 'square', 0.08);
-  }
-
-  function triggerGameOver() {
-    gameState = 2;
-    menuTab = 0;
-    screenShake = 14;
-    chromaTimer = 20;
-    if (maxMeters > highScore) {
-      highScore = maxMeters;
-    }
-    try {
-      localStorage.setItem('sh_hi', String(highScore));
-    } catch (_) {}
-
-    for (let i = 0; i < 28; i++) {
-      const ang = (i / 28) * PI2;
-      const spd = 0.8 + (i % 4) * 0.6;
-      spawnParticle(i % 2 === 0 ? 1 : 0, drone.x, drone.y, cs(ang) * spd, sn(ang) * spd - 0.6, 24 + (i % 15), i % 3 === 0 ? 3 : 2);
-    }
-    sfxTone(180, 32, 0.45, 'sawtooth', 0.18);
-  }
-
-  function resolveCircleAABB(p, dt) {
-    if (p.broken > 0) return false;
-    const x1 = p.x1;
-    const y1 = p.y1;
-    const x2 = p.x2;
-    const y2 = p.y2;
-    const isWall = p.wall;
-    const coolFactor = p.cool;
-    const platformVx = p.vx || 0;
-
-    const xn = mx(x1, mn(drone.x, x2));
-    const yn = mx(y1, mn(drone.y, y2));
-    const dx = drone.x - xn;
-    const dy = drone.y - yn;
-    const d2 = dx * dx + dy * dy;
-
-    if (d2 < drone.r * drone.r) {
-      const d = M.sqrt(d2) || 0.001;
-      const nx = dx / d;
-      const ny = dy / d;
-
-      drone.x += nx * (drone.r - d);
-      drone.y += ny * (drone.r - d);
-
-      if (p.spring && ny < -0.65 && ab(drone.x - (x1 + x2) * 0.5) < 12) {
-        drone.vy = MAX_VY_UP * 1.42;
-        drone.pressure = mn(drone.maxPsi, drone.pressure + 15);
-        sfxTone(180, 680, 0.16, 'triangle', 0.12);
-        for (let s = 0; s < 6; s++) {
-          spawnParticle(0, drone.x, y1, (rn() - 0.5) * 1.6, 1.5, 14, 3);
-        }
-        return true;
-      }
-
-      const vn = drone.vx * nx + drone.vy * ny;
-      if (vn < 0) {
-        const impactSpeed = -vn;
-        if (!isWall && ny < -0.65 && ab(drone.vy) < 1.25 && !drone.leftOn && !drone.rightOn) {
-          drone.vy = 0;
-          // En Z5 Cripta Crio las vigas tienen hielo resbaladizo (menor fricción horizontal)
-          const slide = getBiomeIndex() === 4 ? 0.94 : 0.75;
-          drone.vx = drone.vx * slide + platformVx * 0.25;
-          drone.grounded = true;
-        } else {
-          drone.vx -= (1 + RESTITUTION) * vn * nx;
-          drone.vy -= (1 + RESTITUTION) * vn * ny;
-          if (impactSpeed > 0.65) {
-            sfxBounce(impactSpeed * 0.6);
-            for (let s = 0; s < 3; s++) {
-              spawnParticle(1, xn, yn, nx * 0.8 + (rn() - 0.5) * 1.4, ny * 0.8 - rn(), 12 + s * 3, 2);
-            }
-          }
-        }
-      }
-
-      if (!isWall && ny < -0.65 && ab(drone.vy) < 1.3) {
-        drone.grounded = true;
-        if (platformVx !== 0 && !drone.leftOn && !drone.rightOn) drone.x += platformVx * dt;
-        if (p.fragile) {
-          p.crumble += dt;
-          if (p.crumble >= 48) {
-            p.broken = 180;
-            p.crumble = 0;
-            sfxTone(140, 50, 0.14, 'sawtooth', 0.1);
-            for (let s = 0; s < 6; s++) {
-              spawnParticle(1, (x1 + x2) * 0.5 + (rn() - 0.5) * 20, y1, (rn() - 0.5) * 1.5, 1.2, 16, 2);
-            }
-          }
-        }
-        if (coolFactor > 0 && drone.pressure < drone.maxPsi) {
-          drone.cooling = true;
-          const rechargeBoost = (bossBuffs & 2 ? 1.5 : 1.0) * (bossBuffs & 16 ? 1.25 : 1.0);
-          drone.pressure = mn(drone.maxPsi, drone.pressure + 2.6 * coolFactor * rechargeBoost * dt);
-          if (drone.purge > 0) drone.purge = mx(0, drone.purge - 3 * dt);
-        }
-      }
-      return true;
-    }
-    return false;
-  }
-
-  function updateBoss(dt) {
-    if (!boss.active) return;
-    if (boss.hitFlash > 0) boss.hitFlash = mx(0, boss.hitFlash - dt);
-    if (boss.shield > 0) boss.shield = mx(0, boss.shield - dt);
-    boss.phaseTimer += dt;
-    boss.coreTimer -= dt;
-
-    const ay = boss.arenaY;
-    if (drone.y - drone.r < ay + 36) {
-      drone.y = ay + 36 + drone.r;
-      drone.vy = ab(drone.vy) * 0.6 + 0.5;
-    }
-    if (drone.y + drone.r > ay + H - 14) {
-      drone.y = ay + H - 14 - drone.r;
-      drone.vy = -1.65;
-      sfxBounce(0.9);
-    }
-
-    if (boss.coreTimer <= 0 && activeChunks.length > 0) {
-      boss.coreTimer = 175;
-      if (boss.shield <= 0 && boss.hitFlash <= 0) boss.shield = 130;
-      const topChunk = activeChunks[activeChunks.length - 1];
-      topChunk.cores.push({
-        x: lcgRange(WALL_LEFT + 30, WALL_RIGHT - 30),
-        y: ay + lcgRange(105, 195),
-        taken: false,
-        bossAmmo: true
-      });
-    }
-
-    boss.baseY = ay + 64;
-    const enrage = boss.hp <= boss.maxHp >> 1 ? 1.3 : 1.0;
-    const pat = boss.type % 5;
-
-    if (pat === 0) {
-      if (boss.actionState === 0) {
-        boss.x += boss.vx * enrage * dt;
-        if (boss.x < WALL_LEFT + 26 || boss.x > WALL_RIGHT - 26) boss.vx = -boss.vx;
-        boss.y += (boss.baseY - boss.y) * 0.1 * dt;
-        if (boss.phaseTimer > 95 / enrage) {
-          boss.actionState = 1;
-          boss.phaseTimer = 0;
-          boss.vy = 2.7 * enrage;
-          sfxTone(200, 70, 0.2, 'sawtooth', 0.12);
-        }
-      } else {
-        boss.y += boss.vy * dt;
-        if (boss.y > ay + H - 38 || boss.phaseTimer > 42) {
-          boss.actionState = 0;
-          boss.phaseTimer = 0;
-          screenShake = 6;
-          for (let k = -1; k <= 1; k++) {
-            boss.shots.push({ x: boss.x, y: boss.y, vx: k * 1.25 * enrage, vy: -1.5, r: 4, grav: 0.04 });
-          }
-        }
-      }
-    } else if (pat === 1) {
-      boss.x += boss.vx * 1.3 * enrage * dt;
-      if (boss.x < WALL_LEFT + 26 || boss.x > WALL_RIGHT - 26) boss.vx = -boss.vx;
-      boss.y = boss.baseY + sn(boss.phaseTimer * 0.09) * 16;
-      if (boss.phaseTimer > 68 / enrage) {
-        boss.phaseTimer = 0;
-        const ang = M.atan2(drone.y - boss.y, drone.x - boss.x);
-        for (let k = -1; k <= 1; k++) {
-          boss.shots.push({
-            x: boss.x,
-            y: boss.y,
-            vx: cs(ang + k * 0.28) * 1.85 * enrage,
-            vy: sn(ang + k * 0.28) * 1.85 * enrage,
-            r: 4,
-            grav: 0
-          });
-        }
-        sfxTone(680, 240, 0.12, 'square', 0.09);
-      }
-    } else if (pat === 2) {
-      boss.x += boss.vx * enrage * dt;
-      if (boss.x < WALL_LEFT + 26 || boss.x > WALL_RIGHT - 26) boss.vx = -boss.vx;
-      boss.y = boss.baseY + cs(boss.phaseTimer * 0.07) * 10;
-      if (boss.phaseTimer > 58 / enrage) {
-        boss.phaseTimer = 0;
-        boss.shots.push(
-          { x: boss.x, y: boss.y + 10, vx: 1.5 * enrage, vy: 0.9, r: 5, grav: 0.03, bounces: 1 },
-          { x: boss.x, y: boss.y + 10, vx: -1.5 * enrage, vy: 0.9, r: 5, grav: 0.03, bounces: 1 }
-        );
-        sfxTone(320, 140, 0.12, 'triangle', 0.09);
-      }
-    } else if (pat === 3) {
-      boss.x = W * 0.5 + sn(elapsedTime * 1.9 * enrage) * 66;
-      boss.y = boss.baseY + cs(elapsedTime * 2.5) * 14;
-      drone.vx += (boss.x > drone.x ? 0.02 : -0.02) * dt;
-      if (boss.phaseTimer > 64 / enrage) {
-        boss.phaseTimer = 0;
-        for (let k = 0; k < 6; k++) {
-          const a = elapsedTime * 2 + (k * PI2) / 6;
-          boss.shots.push({ x: boss.x, y: boss.y, vx: cs(a) * 1.55 * enrage, vy: sn(a) * 1.55 * enrage, r: 4, grav: 0 });
-        }
-        sfxTone(840, 320, 0.14, 'sawtooth', 0.09);
-      }
-    } else {
-      boss.x = W * 0.5 + sn(elapsedTime * 2.2) * 72;
-      boss.y = boss.baseY + sn(elapsedTime * 4.4) * 18;
-      if (boss.phaseTimer > 60 / enrage) {
-        boss.phaseTimer = 0;
-        const ang = M.atan2(drone.y - boss.y, drone.x - boss.x);
-        boss.shots.push({ x: boss.x, y: boss.y, vx: cs(ang) * 2.1, vy: sn(ang) * 2.1, r: 5, grav: 0 });
-        for (let k = 0; k < 4; k++) {
-          const a = ang + 0.4 + (k * PI2) / 4;
-          boss.shots.push({ x: boss.x, y: boss.y, vx: cs(a) * 1.4, vy: sn(a) * 1.4, r: 4, grav: 0, bounces: 1 });
-        }
-        sfxTone(920, 260, 0.15, 'sawtooth', 0.1);
-      }
-    }
-
-    const distBoss = hy(drone.x - boss.x, drone.y - boss.y) || 0.001;
-    if (distBoss <= drone.r + boss.r) {
-      const nx = (drone.x - boss.x) / distBoss;
-      const ny = (drone.y - boss.y) / distBoss;
-      drone.x = boss.x + nx * (drone.r + boss.r + 2);
-      drone.y = boss.y + ny * (drone.r + boss.r + 2);
-      drone.vx = nx * 1.75;
-      drone.vy = ny * 1.75;
-
-      if (drone.overdrive > 0 || drone.slamWaveR > 0 || drone.shield > 0) {
-        const hadShield = drone.shield > 0;
-        if (hadShield) drone.shield = 0;
-        damageBoss(1, hadShield);
-      } else {
-        applyDamage(26, 1, 'APLASTADO POR EL JEFE');
-      }
-    } else if (distBoss <= drone.r + boss.r + 6) {
-      triggerGraze(boss.x, boss.y);
-    }
-
-    for (let i = boss.shots.length - 1; i >= 0; i--) {
-      const s = boss.shots[i];
-      s.x += s.vx * dt;
-      s.y += s.vy * dt;
-      if (s.grav) s.vy += s.grav * dt;
-
-      if (s.bounces && (s.x < WALL_LEFT + s.r || s.x > WALL_RIGHT - s.r)) {
-        s.vx = -s.vx;
-      }
-
-      const dShot = hy(drone.x - s.x, drone.y - s.y);
-      if (dShot < drone.r + s.r) {
-        boss.shots.splice(i, 1);
-        if (drone.shield <= 0) applyDamage(20, 1, 'ABATIDO POR EL JEFE');
-        continue;
-      } else if (dShot < drone.r + s.r + 5) {
-        triggerGraze(s.x, s.y);
-      }
-
-      if (s.y > camY + H + 20 || s.y < camY - 60 || s.x < 0 || s.x > W) {
-        boss.shots.splice(i, 1);
-      }
-    }
-  }
-
-  function updatePhysics(dt) {
-    elapsedTime += dt / 60;
-    if (drone.invuln > 0) drone.invuln = mx(0, drone.invuln - dt);
-    if (drone.shield > 0) drone.shield = mx(0, drone.shield - dt);
-    if (drone.grazeCd > 0) drone.grazeCd = mx(0, drone.grazeCd - dt);
-    if (drone.slamCd > 0) drone.slamCd = mx(0, drone.slamCd - dt);
-    if (levelBannerTimer > 0) levelBannerTimer = mx(0, levelBannerTimer - dt);
-    if (surgeTimer > 0) surgeTimer = mx(0, surgeTimer - dt);
-    if (drone.slamWaveR > 0) {
-      drone.slamWaveR += 3.8 * dt;
-      if (drone.slamWaveR > 78) drone.slamWaveR = 0;
-    }
-
-    const hull = HULLS[selectedHull];
-    const wantLeft = !!(keys['ArrowLeft'] || keys['KeyA'] || touchLeft);
-    const wantRight = !!(keys['ArrowRight'] || keys['KeyD'] || touchRight);
-
-    if (boss.active || drone.overdrive > 0) {
-      if (drone.overdrive > 0) drone.overdrive = mx(0, drone.overdrive - dt);
-      drone.pressure = drone.maxPsi;
-      drone.purge = 0;
-    }
-
-    if (drone.purge > 0) {
-      drone.purge = mx(0, drone.purge - dt);
-      drone.leftOn = false;
-      drone.rightOn = false;
-      if (rn() < 0.25 * dt) {
-        spawnParticle(0, drone.x + (rn() * 8 - 4), drone.y - 5, (rn() - 0.5) * 0.8, -0.9, 16, 3);
-      }
-      if (drone.purge <= 0) {
-        drone.pressure = drone.maxPsi * 0.38;
-        sfxTone(330, 520, 0.1, 'triangle', 0.07);
-      }
-    } else {
-      drone.leftOn = wantLeft;
-      drone.rightOn = wantRight;
-      const activeNozzles = (drone.leftOn ? 1 : 0) + (drone.rightOn ? 1 : 0);
-      if (!boss.active && activeNozzles > 0 && drone.overdrive <= 0) {
-        const ecoFactor = (bossBuffs & 4 ? 0.75 : 1.0) * hull.psiUse;
-        drone.pressure = mx(0, drone.pressure - 0.28 * activeNozzles * ecoFactor * dt);
-        if (drone.pressure <= 0) {
-          drone.pressure = 0;
-          drone.purge = 72;
-          screenShake = 6;
-          sfxTone(480, 110, 0.32, 'sawtooth', 0.14);
-        }
-      } else if (!boss.active && !drone.grounded && drone.pressure < drone.maxPsi) {
-        const airRegen = bossBuffs & 16 ? 0.15 : 0.06;
-        drone.pressure = mn(drone.maxPsi, drone.pressure + airRegen * dt);
-      }
-    }
-
-    const boostMult = (drone.overdrive > 0 ? 1.55 : 1.0) * (bossBuffs & 32 ? 1.15 : 1.0);
-    const bIdx = getBiomeIndex();
-    let ax = 0;
-    let ay = 0;
-
-    if (drone.leftOn) {
-      ax += THRUST_X * hull.tx * boostMult;
-      ay += THRUST_Y * hull.ty * boostMult;
-      if (rn() < 0.85 * dt) {
-        spawnParticle(drone.overdrive > 0 ? 1 : 0, drone.x - 6, drone.y + 3, -0.8 + (rn() - 0.5) * 0.4, 1.1 + rn() * 0.4, 13, 3);
-      }
-    }
-    if (drone.rightOn) {
-      ax -= THRUST_X * hull.tx * boostMult;
-      ay += THRUST_Y * hull.ty * boostMult;
-      if (rn() < 0.85 * dt) {
-        spawnParticle(drone.overdrive > 0 ? 1 : 0, drone.x + 6, drone.y + 3, 0.8 + (rn() - 0.5) * 0.4, 1.1 + rn() * 0.4, 13, 3);
-      }
-    }
-
-    // Efectos ambientales exclusivos por Zona durante la escalada
-    if (!boss.active) {
-      if (surgeTimer > 0) ay -= 0.042;
-      if (bIdx === 3 || bIdx === 8) ay -= 0.022; // Corrientes térmicas ascendentes en Tormenta y Fragua Solar
-      if (bIdx === 1 || bIdx === 7) ax += sn(elapsedTime * 2.2) * 0.02; // Pulsos magnéticos / corrientes abisales
-    }
-
-    if (drone.leftOn || drone.rightOn) {
-      if (steamCooldown <= 0) {
-        sfxSteam(drone.leftOn && drone.rightOn);
-        steamCooldown = 5;
-      }
-    }
-    if (steamCooldown > 0) steamCooldown -= dt;
-
-    const dragFactor = M.pow(DRAG, dt);
-    drone.vx = (drone.vx + ax * dt) * dragFactor;
-    drone.vy = (drone.vy + (GRAVITY + ay) * dt) * dragFactor;
-
-    const maxUp = drone.overdrive > 0 ? MAX_VY_UP * 1.3 : MAX_VY_UP;
-    drone.vx = mx(-MAX_VX, mn(MAX_VX, drone.vx));
-    drone.vy = mx(maxUp, mn(MAX_VY_DOWN, drone.vy));
-
-    drone.x += drone.vx * dt;
-    drone.y += drone.vy * dt;
-    drone.theta = drone.vx * 0.12;
-
-    drone.cooling = false;
-    drone.grounded = false;
-
-    for (let i = playerShots.length - 1; i >= 0; i--) {
-      const ps = playerShots[i];
-      ps.x += ps.vx * dt;
-      ps.y += ps.vy * dt;
-      if (boss.active && hy(ps.x - boss.x, ps.y - boss.y) < boss.r + 6) {
-        const isParry = ps.parry === 1;
-        playerShots.splice(i, 1);
-        damageBoss(1, isParry);
-        break;
-      }
-      if (ps.y < camY - 20 || ps.y > camY + H + 20 || ps.x < WALL_LEFT || ps.x > WALL_RIGHT) {
-        playerShots.splice(i, 1);
-      }
-    }
-
-    for (let c = 0; c < activeChunks.length; c++) {
-      const chunk = activeChunks[c];
-
-      for (let i = 0; i < chunk.platforms.length; i++) {
-        const p = chunk.platforms[i];
-        if (boss.active && (!p.wall || p.barrier)) continue;
-
-        if (p.broken > 0) {
-          p.broken = mx(0, p.broken - dt);
-          continue;
-        }
-        if (p.crumble > 0 && !drone.grounded) {
-          p.crumble = mx(0, p.crumble - 0.3 * dt);
-        }
-        if (p.vx) {
-          p.x1 += p.vx * dt;
-          p.x2 = p.x1 + p.w;
-          if (p.x1 < p.minX || p.x2 > p.maxX) {
-            p.vx = -p.vx;
-            p.x1 = mx(p.minX, mn(p.x1, p.maxX - p.w));
-            p.x2 = p.x1 + p.w;
-          }
-        }
-        resolveCircleAABB(p, dt);
-      }
-
-      for (let i = 0; i < chunk.cores.length; i++) {
-        const core = chunk.cores[i];
-        if (core.taken || (boss.active && !core.bossAmmo)) continue;
-        if (hy(drone.x - core.x, drone.y - core.y) < drone.r + 6) {
-          core.taken = true;
-          drone.comboCores++;
-          drone.pressure = mn(drone.maxPsi, drone.pressure + 25);
-          sfxTone(440, 880, 0.14, 'square', 0.1);
-
-          if (boss.active) damageBoss(1, true);
-
-          for (let s = 0; s < 8; s++) {
-            const a = (s / 8) * PI2;
-            spawnParticle(1, core.x, core.y, cs(a) * 1.6, sn(a) * 1.6, 15, 2);
-          }
-
-          if (drone.comboCores >= 3) {
-            drone.comboCores = 0;
-            drone.overdrive = bossBuffs & 256 ? 320 : 240;
-            drone.pressure = drone.maxPsi;
-            drone.purge = 0;
-            bannerText = '!MODO OVERDRIVE!';
-            levelBannerTimer = 95;
-            screenShake = 8;
-            chromaTimer = 14;
-            sfxTone(523.2, 1046.5, 0.3, 'square', 0.12);
-          }
-        }
-      }
-
-      if (boss.active) continue;
-
-      for (let i = 0; i < chunk.gates.length; i++) {
-        const g = chunk.gates[i];
-        const cycle = (elapsedTime * 60 + g.phase) % g.period;
-        const closedRatio = cycle / g.period;
-
-        if (closedRatio < 0.38) {
-          g.state = 0;
-          g.curLen += (16 - g.curLen) * 0.18 * dt;
-        } else if (closedRatio < 0.52) {
-          g.state = 1;
-          g.curLen += (24 - g.curLen) * 0.15 * dt;
-        } else if (closedRatio < 0.88) {
-          g.state = 2;
-          g.curLen += (g.maxLen - g.curLen) * 0.25 * dt;
-        } else {
-          g.state = 0;
-          g.curLen += (16 - g.curLen) * 0.18 * dt;
-        }
-
-        const gx1 = g.fromLeft ? WALL_LEFT : WALL_RIGHT - g.curLen;
-        const gx2 = g.fromLeft ? WALL_LEFT + g.curLen : WALL_RIGHT;
-
-        if (resolveCircleAABB({ x1: gx1, y1: g.y1, x2: gx2, y2: g.y2, wall: true, cool: 0, broken: 0 }, dt)) {
-          if (g.state === 2 && closedRatio < 0.62) applyDamage(20, 0, 'APLASTADO EN COMPUERTA');
-        }
-      }
-
-      for (let i = chunk.gears.length - 1; i >= 0; i--) {
-        const g = chunk.gears[i];
-        g.angle += g.omega * dt;
-        if (g.vx) {
-          g.x += g.vx * dt;
-          if (g.x < g.minX || g.x > g.maxX) g.vx = -g.vx;
-        }
-
-        let hitByShot = false;
-        for (let j = playerShots.length - 1; j >= 0; j--) {
-          if (hy(playerShots[j].x - g.x, playerShots[j].y - g.y) < g.R + 5) {
-            playerShots.splice(j, 1);
-            hitByShot = true;
-            break;
-          }
-        }
-        if (hitByShot) {
-          chunk.gears.splice(i, 1);
-          sfxTone(300, 90, 0.16, 'sawtooth', 0.12);
-          continue;
-        }
-
-        const dx = drone.x - g.x;
-        const dy = drone.y - g.y;
-        const dist = hy(dx, dy) || 0.001;
-        const minDist = drone.r + g.R;
-
-        if (dist <= minDist) {
-          if (drone.overdrive > 0 || drone.shield > 0) {
-            for (let s = 0; s < 10; s++) {
-              const a = (s / 10) * PI2;
-              spawnParticle(1, g.x, g.y, cs(a) * 2.5, sn(a) * 2.5, 20, 3);
-            }
-            chunk.gears.splice(i, 1);
-            screenShake = 8;
-            sfxTone(300, 90, 0.18, 'sawtooth', 0.14);
-            continue;
-          }
-
-          const nx = dx / dist;
-          const ny = dy / dist;
-          const phi = M.atan2(dy, dx);
-
-          drone.x = g.x + nx * (minDist + 1);
-          drone.y = g.y + ny * (minDist + 1);
-
-          const vTangX = g.omega * g.R * -sn(phi) * 1.1;
-          const vTangY = g.omega * g.R * cs(phi) * 1.1;
-          drone.vx = mx(-MAX_VX, mn(MAX_VX, nx * 1.3 + vTangX));
-          drone.vy = mx(MAX_VY_UP, mn(MAX_VY_DOWN, ny * 1.3 + vTangY));
-
-          applyDamage(32, 1, 'DESTRUIDO POR SIERRA');
-
-          for (let s = 0; s < 8; s++) {
-            spawnParticle(1, g.x + nx * g.R, g.y + ny * g.R, (rn() - 0.5) * 2.4 + nx, (rn() - 0.5) * 2.4 + ny, 16, 2);
-          }
-        } else if (dist <= minDist + 6) {
-          triggerGraze(g.x, g.y);
-        }
-      }
-
-      for (let i = 0; i < chunk.vents.length; i++) {
-        const v = chunk.vents[i];
-        if (v.stun > 0) {
-          v.stun -= dt;
-          continue;
-        }
-        const cycle = (elapsedTime * 60 + v.phase) % v.period;
-        if (cycle < 42) {
-          if (rn() < 0.3 * dt) {
-            spawnParticle(0, v.x + v.dir * 4, v.y + (rn() * 6 - 3), v.dir * lcgRange(1.6, 2.4), (rn() - 0.5) * 0.3, 15, 3);
-          }
-          const inY = ab(drone.y - v.y) < 10;
-          const inX = v.dir === 1 ? drone.x > v.x && drone.x < v.x + v.len : drone.x < v.x && drone.x > v.x - v.len;
-          if (inY && inX) {
-            drone.vx = mx(-MAX_VX, mn(MAX_VX, drone.vx + v.dir * 0.16 * dt));
-            drone.vy -= 0.04 * dt;
-            if (drone.overdrive <= 0) drone.pressure = mx(0, drone.pressure - 0.32 * dt);
-          }
-        }
-      }
-    }
-
-    updateBoss(dt);
-
-    if (boss.active) {
-      camY += (boss.arenaY - camY) * 0.2 * dt;
-    } else {
-      const targetCamY = drone.y - H * 0.6;
-      if (targetCamY < camY) camY += (targetCamY - camY) * (1 - M.pow(0.88, dt));
-      else if (targetCamY > camY + 32) camY += (targetCamY - camY - 32) * (1 - M.pow(0.92, dt));
-    }
-
-    updateChunksWindow();
-
-    currentMeters = getHeightMetersAtY(drone.y);
-    if (currentMeters > maxMeters) maxMeters = currentMeters;
-
-    if (!boss.active && maxMeters >= nextBossMeters) {
-      spawnBoss(nextBossIdx);
-    }
-
-    if (!boss.active && maxMeters >= nextSurgeMeters) {
-      nextSurgeMeters += 130;
-      surgeTimer = 300;
-      playGateWarning();
-    }
-
-    const newDiff = getDiffAtMeters(maxMeters);
-    if (newDiff > diffLevel) {
-      diffLevel = newDiff;
-      sfxTone(330, 660, 0.22, 'square', 0.09);
-    }
-
-    if (boss.active) {
-      lavaY = mx(lavaY, camY + H + 28);
-    } else {
-      const baseLavaStep = 0.21 + (diffLevel - 1) * 0.046 + mn(0.1, elapsedTime * 0.001);
-      lavaY -= baseLavaStep * (surgeTimer > 0 ? 1.6 : 1.0) * dt;
-
-      const maxLavaLag = mx(140, 190 - (diffLevel - 1) * 6);
-      if (lavaY > drone.y + maxLavaLag) lavaY -= (lavaY - (drone.y + maxLavaLag)) * 0.035 * dt;
-    }
-
-    if (rn() < 0.22 * dt) {
-      spawnParticle(2, WALL_LEFT + 6 + rn() * (WALL_RIGHT - WALL_LEFT - 12), lavaY, (rn() - 0.5) * 0.3, -0.6 - rn() * 0.5, 20, 2);
-    }
-
-    if (drone.y + drone.r >= lavaY) {
-      deathReason = 'CONSUMIDO POR EL MAGMA';
-      triggerGameOver();
-    }
-  }
-
-  // =========================================================================
-  // 10. RENDERIZADO TEMÁTICO, INDICADORES EN PRIMER PLANO Y MODALES UNIFICADOS
-  // =========================================================================
-  function drawBackground(camY, biome) {
-    const bIdx = getBiomeIndex();
-    fR(0, 0, W, H, damageFlash > 0 ? C_RDD : biome.bg);
-    const parallaxY = (camY * 0.4) | 0;
-    const brickH = 16;
-    const startRow = fl(parallaxY / brickH);
-
-    if (bIdx % 3 === 0) {
-      fR(34, 0, 6, H, biome.wall);
-      fR(36, 0, 2, H, biome.lavaDeep);
-      fR(W - 40, 0, 6, H, biome.wall);
-      fR(W - 38, 0, 2, H, biome.lavaDeep);
-    } else if (bIdx % 3 === 1) {
-      fR(48, 0, 4, H, biome.brick);
-      fR(W - 52, 0, 4, H, biome.brick);
-    }
-
-    for (let r = startRow; r < startRow + 17; r++) {
-      const sy = r * brickH - parallaxY;
-      fR(WALL_LEFT, sy, WALL_RIGHT - WALL_LEFT, 1, biome.wall);
-
-      const pat = bIdx % 5;
-      if (pat === 0) {
-        const offset = (r & 1) * 16;
-        for (let bx = WALL_LEFT + offset; bx < WALL_RIGHT; bx += 32) fR(bx, sy, 1, brickH);
-        if (r % 5 === 0) fR(WALL_LEFT, sy + 2, WALL_RIGHT - WALL_LEFT, 4, biome.brick);
-      } else if (pat === 1) {
-        for (let bx = WALL_LEFT + 16; bx < WALL_RIGHT; bx += 48) {
-          fR(bx, sy + 2, 2, brickH - 4, biome.brick);
-          if ((r + bx) % 3 === 0) fR(bx, sy + 6, 2, 2, biome.trim);
-        }
-      } else if (pat === 2) {
-        if (r % 3 === 0) {
-          fR(WALL_LEFT, sy + 4, WALL_RIGHT - WALL_LEFT, 5, biome.brick);
-          fR(((r * 37) % 180) + 36, sy + 5, 6, 3, biome.lavaTop);
-        }
-      } else if (pat === 3) {
-        fR(((r * 53) % 190) + 32, sy + 6, 2, 2, r & 1 ? biome.trim : biome.spark);
-        if (r % 4 === 0 && ((elapsedTime * 12 + r) | 0) % 3 === 0) {
-          fR(WALL_LEFT + 20, sy + 8, WALL_RIGHT - WALL_LEFT - 40, 1, biome.trim);
-        }
-      } else {
-        const cx = ((r * 61) % 176) + 40;
-        fR(cx, sy + 3, 4, 10, biome.brick);
-        fR(cx + 1, sy + 5, 2, 6, biome.spark);
-      }
-    }
-  }
-
-  function drawGear(g, camY, biome) {
-    const sy = g.y - camY;
-    if (sy < -g.R - 8 || sy > H + g.R + 8) return;
-
-    ctx.save();
-    ctx.translate(g.x, sy);
-    ctx.rotate(g.angle);
-    drawToothed(g.teeth * 2, g.R + 1, g.R - 4, biome.gearCol, biome.gearRim);
-    fArc(0, 0, g.R - 5, biome.wall);
-    fArc(0, 0, 2.5, biome.spark);
-    ctx.restore();
-  }
-
-  function drawCore(core, camY) {
-    if (core.taken) return;
-    const sy = (core.y - camY) | 0;
-    if (sy < -10 || sy > H + 10) return;
-    const pulse = (2 + sn(elapsedTime * 8) * 1.2) | 0;
-
-    ctx.save();
-    ctx.translate(core.x, sy);
-    ctx.rotate(elapsedTime * 3);
-    fR(-4, -4, 8, 8, core.bossAmmo ? C_CYN : C_GLD);
-    ctx.rotate(PI * 0.25);
-    fR(-3, -3, 6, 6, C_YLW);
-    fR(-1, -1, pulse, pulse, C_WHT);
-    ctx.restore();
-  }
-
-  function drawBoss(camY, biome) {
-    if (!boss.active) return;
-    const sy = (boss.y - camY) | 0;
-    const ay = (boss.arenaY - camY) | 0;
-
-    for (let lx = WALL_LEFT; lx < WALL_RIGHT; lx += 10) {
-      fR(lx, ay + 35, 6, 2, ((elapsedTime * 15) | 0) & 1 ? C_RED : C_YLW);
-      fR(lx, ay + H - 14, 6, 3, ((elapsedTime * 15) | 0) & 1 ? C_CYN : C_ICE);
-    }
-
-    for (let i = 0; i < boss.shots.length; i++) {
-      const s = boss.shots[i];
-      fArc(s.x, s.y - camY, s.r, ((elapsedTime * 20) | 0) & 1 ? C_YLW : biome.lavaTop);
-    }
-
-    ctx.save();
-    ctx.translate(boss.x, sy);
-    if (boss.shield > 0) {
-      ctx.beginPath();
-      ctx.arc(0, 0, boss.r + 6 + sn(elapsedTime * 22) * 1.5, 0, PI2);
-      ctx.strokeStyle = ((elapsedTime * 16) | 0) & 1 ? C_CYN : C_PRP;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-    ctx.rotate(elapsedTime * (boss.type & 1 ? -3.4 : 2.4));
-    drawToothed(16 + (boss.type & 4), boss.r + 3, boss.r - 3, boss.hitFlash > 0 ? C_WHT : biome.lavaMid, C_YLW);
-    fArc(0, 0, boss.r - 5, C_BLK);
-    fArc(0, 0, 6, boss.hitFlash > 0 ? C_RED : biome.lavaTop);
-    fR(-2, -2, 4, 4, C_YLW);
-    ctx.restore();
-
-    const bw = 48;
-    const bx = (boss.x - (bw >> 1)) | 0;
-    const by = sy - boss.r - 12;
-    fR(bx, by, bw, 5, C_BLK);
-    fR(bx + 1, by + 1, fl((boss.hp / boss.maxHp) * (bw - 2)), 3, boss.shield > 0 ? C_CYN : C_RED);
-  }
-
-  function drawWorld(camY, biome) {
-    // 1. Dibujar primero bloques, vigas, compuertas, núcleos y sierras
-    for (let c = 0; c < activeChunks.length; c++) {
-      const chunk = activeChunks[c];
-
-      for (let i = 0; i < chunk.platforms.length; i++) {
-        const p = chunk.platforms[i];
-        if (boss.active && (!p.wall || p.barrier)) continue;
-        if (p.broken > 0) continue;
-        const sy1 = (p.y1 - camY) | 0;
-        const sy2 = (p.y2 - camY) | 0;
-        if (sy2 < 0 || sy1 > H) continue;
-        const pw = (p.x2 - p.x1) | 0;
-        const ph = mx(1, sy2 - sy1);
-        const shakeX = p.crumble > 0 ? ((rn() - 0.5) * 3) | 0 : 0;
-
-        if (p.wall && !p.barrier) {
-          fR(p.x1, sy1, pw, ph, biome.brick);
-          fR(p.x1 === 0 ? pw - 3 : p.x1, sy1, 3, ph, biome.trim);
-        } else if (p.barrier) {
-          fR(p.x1, sy1, pw, ph, biome.wall);
-          fR(p.x1, sy1, pw, 2, biome.trim);
-          fR(p.x1, sy2 - 2, pw, 2, biome.trim);
-          for (let sx = p.x1 + 4; sx < p.x2 - 6; sx += 10) {
-            fR(sx, sy1 + 3, 4, ph - 6, biome.spark);
-          }
-        } else {
-          const px1 = (p.x1 | 0) + shakeX;
-          fR(px1, sy1, pw, ph, p.fragile ? C_RDD : biome.plat);
-          fR(px1, sy1, pw, 3, p.fragile ? C_ORG : p.cool >= 1 ? biome.platTop : biome.trim);
-          if (p.cool > 0 && !p.fragile) {
-            for (let rx = px1 + 4; rx < p.x2 - 4; rx += 10) {
-              fR(rx, sy1 + 1, 4, 1, C_WHT);
-            }
-          }
-          if (p.spring) {
-            const mxMid = ((p.x1 + p.x2) >> 1) - 6;
-            fR(mxMid, sy1 - 4, 12, 4, C_YLW);
-            fR(mxMid + 2, sy1 - 2, 8, 2, C_RED);
-          }
-          if (p.vx) fR(((p.x1 + p.x2) >> 1) - 2, sy1 + 4, 4, 3, biome.spark);
-        }
-      }
-
-      for (let i = 0; i < chunk.cores.length; i++) {
-        if (!boss.active || chunk.cores[i].bossAmmo) drawCore(chunk.cores[i], camY);
-      }
-
-      if (boss.active) continue;
-
-      for (let i = 0; i < chunk.gates.length; i++) {
-        const g = chunk.gates[i];
-        const sy1 = (g.y1 - camY) | 0;
-        const sy2 = (g.y2 - camY) | 0;
-        if (sy2 < 0 || sy1 > H) continue;
-        const ph = sy2 - sy1;
-        const gx1 = (g.fromLeft ? WALL_LEFT : WALL_RIGHT - g.curLen) | 0;
-        const gw = g.curLen | 0;
-
-        fR(g.fromLeft ? WALL_LEFT : WALL_RIGHT - g.maxLen, sy1 + 3, g.maxLen, 4, biome.wall);
-        fR(gx1, sy1, gw, ph, g.state === 2 ? C_RDD : biome.plat);
-        const edgeCol = g.state === 2 ? C_RED : g.state === 1 ? C_YLW : biome.trim;
-        fR(gx1, sy1, gw, 2, edgeCol);
-        fR(gx1, sy2 - 2, gw, 2, edgeCol);
-        fR(g.fromLeft ? gx1 + gw - 6 : gx1, sy1 + 2, 6, ph - 4, g.state === 2 ? C_ORG : biome.spark);
-      }
-
-      for (let i = 0; i < chunk.vents.length; i++) {
-        const v = chunk.vents[i];
-        const sy = (v.y - camY) | 0;
-        if (sy < -10 || sy > H + 10) continue;
-        fR(v.dir === 1 ? v.x - 2 : v.x - 4, sy - 4, 6, 8, v.stun > 0 ? C_GRY : biome.trim);
-      }
-
-      for (let i = 0; i < chunk.gears.length; i++) drawGear(chunk.gears[i], camY, biome);
-    }
-
-    for (let i = 0; i < playerShots.length; i++) {
-      const ps = playerShots[i];
-      fArc(ps.x, ps.y - camY, ps.parry ? 5 : 4, ps.parry ? C_CYN : C_ORG);
-      fArc(ps.x, ps.y - camY, 2, C_WHT);
-    }
-
-    drawBoss(camY, biome);
-
-    if (drone.slamWaveR > 0) {
-      ctx.strokeStyle = C_ICE;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(drone.slamWaveX, drone.slamWaveY - camY, drone.slamWaveR, 0, PI2);
-      ctx.stroke();
-    }
-
-    // 2. CAPA DE PRIMER PLANO (FOREGROUND): Indicadores de Dificultad y Jefe SIEMPRE POR ENCIMA de bloques/celdas
-    if (!boss.active) {
-      const bsy = (startY - nextBossMeters * 12 - camY) | 0;
-      const minM = mx(DIFF_STEP, fl(getHeightMetersAtY(camY + H) / DIFF_STEP) * DIFF_STEP);
-      const maxM = getHeightMetersAtY(camY) + DIFF_STEP;
-
-      for (let m = minM; m <= maxM; m += DIFF_STEP) {
-        const sy = (startY - m * 12 - camY) | 0;
-        // Evitar que una línea de dificultad se solape con la línea de Jefe o el HUD superior
-        if (sy >= 38 && sy <= H - 18 && ab(sy - bsy) > 16) {
-          const lCol = maxMeters >= m ? C_GRN : C_ORG;
-          for (let lx = WALL_LEFT + 2; lx < WALL_RIGHT - 4; lx += 12) fR(lx, sy, 7, 1, lCol);
-          fR((W >> 1) - 48, sy - 5, 96, 11, 'rgba(6, 9, 15, 0.92)');
-          fR((W >> 1) - 48, sy - 5, 96, 1, lCol);
-          drawText('DIFICULTAD NV.' + (1 + m / DIFF_STEP), W >> 1, sy - 2, lCol, 1, 1);
-        }
-      }
-
-      if (bsy >= 38 && bsy <= H - 18) {
-        for (let lx = WALL_LEFT + 2; lx < WALL_RIGHT - 4; lx += 10) fR(lx, bsy - 1, 6, 3, C_RED);
-        fR((W >> 1) - 56, bsy - 6, 112, 12, 'rgba(6, 9, 15, 0.94)');
-        fR((W >> 1) - 56, bsy - 6, 112, 1, C_RED);
-        fR((W >> 1) - 56, bsy + 5, 112, 1, C_RED);
-        drawText('! JEFE A ' + nextBossMeters + 'M !', W >> 1, bsy - 2, C_YLW, 1, 1);
-      }
-    }
-  }
-
-  function drawDrone(camY) {
-    if (drone.invuln > 0 && ((drone.invuln >> 1) & 1)) return;
-    const hull = HULLS[selectedHull];
-
-    ctx.save();
-    ctx.translate(drone.x, drone.y - camY);
-    ctx.rotate(drone.theta);
-
-    if (drone.overdrive > 0 || drone.shield > 0) {
-      ctx.beginPath();
-      ctx.arc(0, 0, drone.r + 4 + sn(elapsedTime * 20) * 1.5, 0, PI2);
-      ctx.strokeStyle = drone.shield > 0 ? C_CYN : C_YLW;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-
-    if (selectedHull === 1) {
-      fR(-6, -drone.r - 3, 12, 3, C_GLD);
-    } else if (selectedHull === 2) {
-      fR(-drone.r - 5, -4, 4, 3, C_CYN);
-      fR(drone.r + 1, -4, 4, 3, C_CYN);
-    } else if (selectedHull === 3) {
-      fArc(0, -drone.r - 2, 3, C_PRP);
-    }
-
-    fR(-drone.r - 3, -1, 4, 6, drone.leftOn ? C_ORG : C_CPR);
-    fR(drone.r - 1, -1, 4, 6, drone.rightOn ? C_ORG : C_CPR);
-    if (drone.leftOn) fR(-drone.r - 3, 5, 3, 3, C_WHT);
-    if (drone.rightOn) fR(drone.r, 5, 3, 3, C_WHT);
-
-    fArc(
-      0,
-      0,
-      drone.r,
-      drone.overdrive > 0
-        ? C_GLD
-        : drone.purge > 0
-        ? ((drone.purge >> 2) & 1 ? C_RED : hull.body)
-        : drone.cooling
-        ? C_CYN
-        : hull.body
-    );
-    fArc(-2, -2, drone.r * 0.55, drone.overdrive > 0 ? C_YLW : drone.cooling ? C_ICE : hull.hi);
-    fR(-2, -drone.r - 2, 4, 2, C_CPR);
-    fArc(0, 0, 3.6, C_BLK);
-
-    const px = mx(-1.8, mn(1.8, drone.vx * 0.8));
-    const py = mx(-1.8, mn(1.8, drone.vy * 0.8));
-    fR((px - 1) | 0, (py - 1) | 0, 2, 2, drone.purge > 0 ? C_ORG : drone.cooling ? C_ICE : C_YLW);
-
-    ctx.restore();
-  }
-
-  function drawLava(camY, biome) {
-    const sy = (lavaY - camY) | 0;
-    if (sy > H) {
-      const dist = mx(0, fl((lavaY - drone.y) / 12));
-      if (dist < 14 && !boss.active) fR(WALL_LEFT, H - 3, WALL_RIGHT - WALL_LEFT, 3, (elapsedTime * 10) & 1 ? biome.lavaMid : biome.lavaTop);
-      return;
-    }
-
-    const topY = mx(0, sy);
-    fR(0, topY, W, H - topY, biome.lavaDeep);
-    fR(0, topY, W, mn(10, H - topY), biome.lavaMid);
-
-    for (let x = 0; x < W; x += 8) {
-      fR(x, (topY + sn(elapsedTime * 6 + x * 0.2) * 2) | 0, 6, 3, biome.lavaTop);
-    }
-    for (let x = 2; x < W; x += 16) {
-      fR(x, (topY + cs(elapsedTime * 8 + x * 0.3) * 1.5) | 0, 4, 1, biome.spark);
-    }
-  }
-
-  function drawCRT() {
-    if (!crtEnabled && chromaTimer <= 0) return;
-
-    if (chromaTimer > 0) {
-      fR(0, 0, 4, H, 'rgba(239, 68, 68, 0.14)');
-      fR(W - 4, 0, 4, H, 'rgba(56, 189, 248, 0.14)');
-    }
-
-    if (crtEnabled) {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
-      for (let y = 0; y < H; y += 2) {
-        fR(0, y, W, 1);
-      }
-    }
-  }
-
-  function drawHUD(biome) {
-    fR(0, 0, W, 25, C_BLK);
-    fR(0, 24, W, 1, biome.trim);
-
-    drawText(boss.active ? 'INF' : 'PSI', 4, 4, boss.active ? C_GLD : C_WHT, 1);
-    fR(4, 12, 62, 7, C_DRK);
-
-    const pWidth = fl((drone.pressure / drone.maxPsi) * 60);
-    const barColor = boss.active || drone.overdrive > 0
-      ? (((elapsedTime * 16) | 0) & 1 ? C_YLW : C_GLD)
-      : drone.purge > 0
-      ? (((drone.purge >> 2) & 1) ? C_RED : C_ORG)
-      : drone.cooling
-      ? C_ICE
-      : drone.pressure < drone.maxPsi * 0.3
-      ? C_ORG
-      : C_CYN;
-    fR(5, 13, pWidth, 5, barColor);
-
-    for (let i = 0; i < drone.maxHp; i++) {
-      fR(25 + i * 6, 4, 4, 5, i < drone.hp ? C_YLW : C_DRK);
-    }
-
-    drawText('Z' + (getBiomeIndex() + 1) + ' NV:' + diffLevel, 72, 4, C_ORG, 1);
-    for (let i = 0; i < 3; i++) fR(138 + i * 6, 4, 4, 5, drone.overdrive > 0 || i < drone.comboCores ? C_YLW : C_DRK);
-
-    const sk = SKILLS[selectedSkill];
-    const maxCd = getMaxSlamCd();
-    const slamReady = drone.purge <= 0 && drone.slamCd <= 0 && (boss.active || drone.pressure >= sk.cost || drone.overdrive > 0);
-    const slamRatio = drone.slamCd > 0 ? 1 - drone.slamCd / maxCd : boss.active ? 1 : mn(1, drone.pressure / sk.cost);
-    fR(72, 12, 92, 7, C_DRK);
-    fR(73, 13, fl(slamRatio * 90), 5, slamReady ? C_GRN : C_RST);
-    drawText(
-      slamReady ? 'ESP:LISTO' : drone.slamCd > 0 ? 'ESP:RECARGA' : 'ESP:' + sk.cost + ' PSI',
-      118,
-      13,
-      slamReady ? C_WHT : C_GRY,
-      1,
-      1
-    );
-
-    drawText('ALT:' + maxMeters + 'M', 251, 4, C_YLW, 1, 2);
-    drawText('TOP:' + mx(highScore, maxMeters) + 'M', 251, 13, C_GRY, 1, 2);
-
-    // RANURA 1: Barra superior de Arena 1v1 o Indicador de Pausa
-    let nextAlertY = 27;
-    if (boss.active) {
-      fR(WALL_LEFT, nextAlertY, WALL_RIGHT - WALL_LEFT, 11, 'rgba(6, 9, 15, 0.92)');
-      drawText('1V1: ' + BIOMES[boss.type].bossName + ' (PSI INF)', W >> 1, nextAlertY + 3, C_RED, 1, 1);
-      nextAlertY += 13;
-    } else {
-      // Indicador no intrusivo de cercanía al Jefe (<30M) en su propia ranura dedicada
-      const distToBoss = nextBossMeters - maxMeters;
-      if (distToBoss > 0 && distToBoss <= 28 && levelBannerTimer <= 0) {
-        fR(36, nextAlertY, W - 72, 11, 'rgba(6, 9, 15, 0.9)');
-        drawText('PROXIMO JEFE EN ' + distToBoss + 'M', W >> 1, nextAlertY + 3, C_GLD, 1, 1);
-        nextAlertY += 13;
-      }
-    }
-
-    // RANURA 2: Notificaciones de Bonos, Parry, Overdrive o Sobrecarga
-    if (levelBannerTimer > 0) {
-      fR(20, nextAlertY, W - 40, 11, 'rgba(6, 9, 15, 0.9)');
-      drawText(bannerText, W >> 1, nextAlertY + 3, C_YLW, 1, 1);
-    } else if (surgeTimer > 0 && !boss.active) {
-      fR(26, nextAlertY, W - 52, 11, 'rgba(6, 9, 15, 0.9)');
-      drawText('!SOBRECARGA TERMICA ACTIVA!', W >> 1, nextAlertY + 3, C_ORG, 1, 1);
-    }
-
-    // RANURA 3 (Inferior): Alerta dedicada de Magma en la parte baja
-    if (!boss.active) {
-      const lavaDistM = mx(0, fl((lavaY - drone.y) / 12));
-      if (lavaDistM < 12) {
-        fR(62, H - 15, W - 124, 11, 'rgba(6, 9, 15, 0.92)');
-        drawText(
-          '! MAGMA A ' + lavaDistM + 'M !',
-          W >> 1,
-          H - 12,
-          ((elapsedTime * 10) | 0) & 1 ? C_RED : C_YLW,
-          1,
-          1
-        );
-      }
-    }
-  }
-
-  function drawGarageBox() {
-    fR(22, 66, W - 44, 108, C_DRK);
-    drawText('VEHICULOS [TECLAS 1-4]:', W >> 1, 71, C_CYN, 1, 1);
-    for (let i = 0; i < 4; i++) {
-      const unl = isHullUnlocked(i);
-      const sel = selectedHull === i;
-      const col = sel ? C_YLW : unl ? C_WHT : C_GRY;
-      drawText(
-        (sel ? '>' : ' ') + (i + 1) + ':' + HULLS[i].name + (unl ? '' : ' (' + HULLS[i].req + ')'),
-        28,
-        81 + i * 9,
-        col,
-        1,
-        0
-      );
-    }
-
-    drawText('HABILIDAD [ESP] (CAMBIAR CON [Q]):', W >> 1, 120, C_GLD, 1, 1);
-    const sk = SKILLS[selectedSkill];
-    drawText('> ' + sk.name + ' (' + sk.cost + ' PSI)', W >> 1, 130, C_GRN, 1, 1);
-    drawText(sk.desc, W >> 1, 140, C_WHT, 1, 1);
-
-    let defeatedCount = 0;
-    for (let b = 0; b < 10; b++) if (bossUnlockMask & (1 << b)) defeatedCount++;
-    drawText('ASCENSOR [E]: ' + BIOMES[startZone].name, W >> 1, 152, C_CYN, 1, 1);
-    drawText('JEFES VENCIDOS: ' + defeatedCount + '/10', W >> 1, 162, C_ICE, 1, 1);
-  }
-
-  function drawModal(title, titleCol, borderCol, subText, btnText) {
-    fR(16, 16, W - 32, H - 32, 'rgba(6, 9, 15, 0.94)');
-    ctx.strokeStyle = borderCol;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(17, 17, W - 34, H - 34);
-
-    drawText(title, W >> 1, 24, titleCol, 2, 1);
-    if (subText) drawText(subText, W >> 1, 44, C_RED, 1, 1);
-
-    const btnCol = ((elapsedTime * 3) | 0) & 1 ? C_ORG : C_RST;
-    fR(60, 182, W - 120, 20, btnCol);
-    ctx.strokeStyle = C_YLW;
-    ctx.strokeRect(60, 182, W - 120, 20);
-    drawText(btnText, W >> 1, 190, C_WHT, 1, 1);
-  }
-
-  function drawMenu() {
-    const biome = BIOMES[((elapsedTime * 0.2) | 0) % 10];
-    drawBackground(elapsedTime * -12, biome);
-    drawModal(
-      'STEAM HOPPER',
-      C_GLD,
-      C_BRS,
-      bossUnlockMask & 512 ? 'CORONA CENIT [NG+ DESBLOQUEADO]' : '',
-      'JUGAR YA [ESP]'
-    );
-
-    drone.x = W >> 1;
-    drone.y = 52 + sn(elapsedTime * 3) * 2;
-    drone.vx = cs(elapsedTime * 1.8) * 1.1;
-    drone.vy = sn(elapsedTime * 3) * 0.4;
-    drone.theta = drone.vx * 0.12;
-    drone.leftOn = sn(elapsedTime * 3) < 0;
-    drone.rightOn = sn(elapsedTime * 3) < 0.2;
-    drone.invuln = 0;
-    drone.overdrive = 0;
-    drone.shield = 0;
-    drawDrone(0);
-
-    if (menuTab === 0) {
-      fR(24, 66, W - 48, 66, C_DRK);
-      drawText('GUIA RAPIDA:', W >> 1, 72, C_CYN, 1, 1);
-      drawText('A / D : PROPULSORES (AMBOS = SUBIR)', W >> 1, 84, C_WHT, 1, 1);
-      drawText('ESPACIO : HABILIDAD (+PARRY EN JEFE)', W >> 1, 96, C_YLW, 1, 1);
-      drawText('P / ESC : PAUSA | E : ASCENSOR ZONA', W >> 1, 108, C_GRN, 1, 1);
-      drawText('EQUIPO: ' + HULLS[selectedHull].name, W >> 1, 120, C_ICE, 1, 1);
-
-      drawText('INICIO [E]: ' + BIOMES[startZone].name, W >> 1, 140, C_GRY, 1, 1);
-      drawText('RECORD MAXIMO: ' + highScore + 'M', W >> 1, 152, C_GLD, 1, 1);
-      drawText('TECLA [T] : VEHICULOS Y HABILIDADES', W >> 1, 165, C_CYN, 1, 1);
-    } else {
-      drawGarageBox();
-    }
-  }
-
-  function drawOverlayModal() {
-    const isPause = gameState === 3;
-    drawModal(
-      isPause ? 'JUEGO EN PAUSA' : 'FIN DE PARTIDA',
-      isPause ? C_CYN : C_ORG,
-      isPause ? C_CYN : C_RED,
-      isPause ? 'TEMA OST: ' + BIOMES[getBiomeIndex()].name : deathReason,
-      isPause ? 'CONTINUAR [ESP]' : 'JUGAR YA [ESP]'
-    );
-
-    if (menuTab === 0) {
-      fR(26, 66, W - 52, 74, C_DRK);
-      drawText('ZONA: ' + BIOMES[getBiomeIndex()].name, W >> 1, 76, C_CYN, 1, 1);
-      drawText('ALTURA MAXIMA: ' + maxMeters + 'M (NV.' + diffLevel + ')', W >> 1, 92, C_WHT, 1, 1);
-      drawText('RECORD: ' + highScore + 'M', W >> 1, 108, C_YLW, 1, 1);
-      let activeBuffs = 0;
-      for (let b = 0; b < 10; b++) if (bossBuffs & (1 << b)) activeBuffs++;
-      drawText('BONOS DE JEFE ACTIVOS: ' + activeBuffs, W >> 1, 124, C_GRN, 1, 1);
-      drawText('TECLA [T] : VEHICULOS Y HABILIDADES', W >> 1, 154, C_CYN, 1, 1);
-    } else {
-      drawGarageBox();
-    }
-  }
-
-  // =========================================================================
-  // 11. BUCLE PRINCIPAL DESACOPLADO POR DELTA-TIME (TOPE 240 FPS)
+  // 12. BUCLE PRINCIPAL 240 FPS
   // =========================================================================
   let lastFrameTime = performance.now();
 
   function frame(now) {
     requestAnimationFrame(frame);
-
     const elapsed = now - lastFrameTime;
     if (elapsed < MIN_FRAME_DELTA) return;
     lastFrameTime = now;
 
     const dt = mn(elapsed, 33.33) / 16.666;
-
     if (gameState === 1) {
       updatePhysics(dt);
       updateBGM();
       updateParticles(dt);
     } else {
       elapsedTime += dt / 60;
+      if (gameState === 0) updateBGM();
       if (gameState !== 3) updateParticles(dt);
     }
 
     if (screenShake > 0) screenShake = mx(0, screenShake - dt);
     if (damageFlash > 0) damageFlash = mx(0, damageFlash - dt);
-    if (chromaTimer > 0) chromaTimer = mx(0, chromaTimer - dt);
 
-    const biome = BIOMES[getBiomeIndex()];
-
+    const lv = LEVELS[currentLevel % 4];
     ctx.save();
-    if (screenShake > 0) {
-      ctx.translate(((rn() - 0.5) * screenShake) | 0, ((rn() - 0.5) * screenShake) | 0);
-    }
+    if (screenShake > 0) ctx.translate(((rn() - 0.5) * screenShake) | 0, ((rn() - 0.5) * screenShake) | 0);
 
     if (gameState === 0) {
       drawMenu();
     } else {
-      drawBackground(camY, biome);
-      drawWorld(camY, biome);
-      drawParticles(camY, biome);
-      if (gameState !== 2) drawDrone(camY);
-      drawLava(camY, biome);
-      drawHUD(biome);
+      drawBackground(camY, lv);
+      drawWorld(camY, lv);
+      drawParticles(camY);
+      if (gameState !== 2 && phase !== 4 && phase !== 5) drawDrone(camY);
+      drawLava(camY, lv);
+      drawHUD(lv);
       if (gameState >= 2) drawOverlayModal();
     }
     drawCRT();
-
     ctx.restore();
   }
 
