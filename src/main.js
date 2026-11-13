@@ -927,7 +927,7 @@
 
   function triggerGameOver() {
     gameState = 2;
-    phaseTimer = 900;
+    phaseTimer = 300;
     menuTab = 0;
     screenShake = 14;
     if (maxMeters > highScore) {
